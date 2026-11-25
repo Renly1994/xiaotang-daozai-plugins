@@ -86,7 +86,8 @@ function cardKey(card) {
 
 function cardUsable(card) {
     // 条目级错误表示本次读数不可信；readError 表示当前读数取自更早的缓存。
-    return !nonEmpty(card.error) && !card.pluginError && !nonEmpty(card.readError);
+    // 字段类型意外时也按错误处理：宁可报未知，也不把可疑读数当正常数据。
+    return !errorFlag(card.error) && !errorFlag(card.pluginError) && !errorFlag(card.readError);
 }
 
 // 只保留能明确换算成百分比的窗口：
@@ -170,8 +171,11 @@ function normalize(value) {
     return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
-function nonEmpty(value) {
-    return typeof value === "string" && value.trim() !== "";
+function errorFlag(value) {
+    if (value === null || value === undefined || value === false || value === 0) {
+        return false;
+    }
+    return typeof value !== "string" || value.trim() !== "";
 }
 
 function isAuto(wanted) {

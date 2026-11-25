@@ -179,6 +179,28 @@ test("空数据与坏响应按未知处理", () => {
     assert.equal(call({ settings: {}, source: ready('{"data":{}}'), storage: null }).quota, null);
 });
 
+test("条目错误字段为意外类型时按未知处理", () => {
+    const cards = [
+        { provider: "a", name: "A", user: "a", windows: [{ name: "W", used: 10 }], error: { code: 1 }, kind: "subscription" },
+        { provider: "b", name: "B", user: "b", windows: [{ name: "W", used: 20 }], pluginError: [], kind: "subscription" },
+        { provider: "c", name: "C", user: "c", windows: [{ name: "W", used: 30 }], readError: 7, kind: "subscription" },
+        { provider: "d", name: "D", user: "d", windows: [{ name: "W", used: 40 }], error: "", pluginError: false, readError: 0, kind: "subscription" },
+    ];
+    const result = call({ settings: { account: "自动选择" }, source: ready(JSON.stringify({ data: cards })), storage: null });
+    assert.equal(result.quota.windows[0].remaining_pct, 60);
+});
+
+test("storage 为异常类型时重置为对象并正常返回", () => {
+    for (const storage of [[], "旧数据", 42, null]) {
+        const result = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage });
+        assert.equal(result.quota.windows.length, 1);
+        assert.equal(result.quota.windows[0].remaining_pct, 96.75);
+        assert.equal(typeof result.storage, "object");
+        assert.ok(!Array.isArray(result.storage));
+        assert.equal(typeof result.storage.account, "string");
+    }
+});
+
 test("设置可以指定一个账号", () => {
     const result = call({ settings: { account: "workbuddy" }, source: ready(fixture("normal.json")), storage: { note: "原有" } });
     assert.deepEqual(result.quota.windows.map(window => window.label), ["Credits", "Extra credits", "Total credits"]);
