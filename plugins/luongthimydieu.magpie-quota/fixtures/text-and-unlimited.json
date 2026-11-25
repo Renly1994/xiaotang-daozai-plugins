@@ -1,0 +1,17 @@
+{
+  "data": [
+    {
+      "provider": "example",
+      "name": "Mixed",
+      "user": "mixed",
+      "windows": [
+        {"name": "仅文字", "used": 0, "text": true, "display": "None on this plan"},
+        {"unlimited": true, "name": "无限", "used": 0, "display": "Unlimited"},
+        {"name": "已用超额", "used": 130, "resetsAt": "2026-12-01T00:00:00Z"},
+        {"name": "钱包", "used": 0, "balance": 12.5, "unit": "USD"}
+      ],
+      "kind": "subscription"
+    }
+  ],
+  "object": "list"
+}

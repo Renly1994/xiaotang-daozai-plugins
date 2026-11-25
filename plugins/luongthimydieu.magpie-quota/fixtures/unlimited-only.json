@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "provider": "copilot",
+      "name": "Copilot",
+      "plan": "Education",
+      "user": "luongthimydieu",
+      "windows": [
+        {"unlimited": true, "name": "Chat requests", "used": 0, "display": "Unlimited"},
+        {"unlimited": true, "name": "Completions", "used": 0, "display": "Unlimited"}
+      ],
+      "kind": "subscription"
+    }
+  ],
+  "object": "list"
+}

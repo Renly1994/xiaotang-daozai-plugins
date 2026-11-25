@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "provider": "deepseek",
+      "name": "DeepSeek",
+      "user": "sk-1…c2b6",
+      "windows": [],
+      "balance": "¥66.30",
+      "kind": "balance"
+    },
+    {
+      "provider": "kimi",
+      "name": "Kimi Code",
+      "icon": "file:1acced0492a72369.png",
+      "windows": [
+        {"name": "5 hours", "used": 42.970000000000006, "resetsAt": "2026-11-25T19:21:03Z"},
+        {"name": "Month", "used": 36.34, "resetsAt": "2026-12-24T00:00:00Z"}
+      ],
+      "readAt": "2026-11-26T00:21:07.0302059+08:00",
+      "kind": "plan"
+    }
+  ],
+  "object": "list"
+}

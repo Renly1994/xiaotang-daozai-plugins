@@ -1,0 +1,242 @@
+// 用 Node 模拟岛仔的调用与回环读取，核对 main.js 的输出。
+// 运行：node --test fixtures/test.cjs
+// 实况：设置 MAGPIE_LIVE=1 后再运行，可额外读取本机 magpie。
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const http = require("node:http");
+const path = require("node:path");
+const test = require("node:test");
+const vm = require("node:vm");
+
+const DIR = __dirname;
+const CODE = fs.readFileSync(path.join(DIR, "..", "main.js"), "utf8");
+const LIMIT = 128 * 1024;
+const TIMEOUT = 2000;
+
+function call(input) {
+    const context = vm.createContext({});
+    vm.runInContext(CODE, context, { filename: "main.js" });
+    return JSON.parse(JSON.stringify(context.refresh(input)));
+}
+
+function fixture(name) {
+    return fs.readFileSync(path.join(DIR, name), "utf8");
+}
+
+function ready(text) {
+    return { status: "ready", text };
+}
+
+// 与宿主 source_read::read_http 相同：直连回环、不跟随重定向、2 秒、128 KiB。
+function readLoopback(address) {
+    return new Promise(resolve => {
+        let settled = false;
+        const finish = value => {
+            if (!settled) {
+                settled = true;
+                resolve(value);
+            }
+        };
+        const url = new URL(address);
+        const request = http.request({
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname + url.search,
+            method: "GET",
+            headers: { Accept: "application/json, text/plain", "Accept-Encoding": "identity" },
+        }, response => {
+            if (response.statusCode < 200 || response.statusCode > 299) {
+                response.resume();
+                finish({ status: "offline" });
+                return;
+            }
+            const chunks = [];
+            let size = 0;
+            response.on("data", chunk => {
+                size += chunk.length;
+                if (size > LIMIT) {
+                    request.destroy();
+                    finish({ status: "offline" });
+                    return;
+                }
+                chunks.push(chunk);
+            });
+            response.on("end", () => finish({ status: "ready", text: Buffer.concat(chunks).toString("utf8") }));
+            response.on("error", () => finish({ status: "offline" }));
+        });
+        request.setTimeout(TIMEOUT, () => {
+            request.destroy();
+            finish({ status: "offline" });
+        });
+        request.on("error", () => finish({ status: "offline" }));
+        request.end();
+    });
+}
+
+async function serve(routes) {
+    const server = http.createServer((request, response) => {
+        const route = routes[request.url.split("?")[0]];
+        if (!route) {
+            response.writeHead(404);
+            response.end("not found");
+            return;
+        }
+        route(request, response);
+    });
+    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+    return {
+        base: `http://127.0.0.1:${server.address().port}`,
+        close: () => new Promise(resolve => {
+            server.closeAllConnections?.();
+            server.close(resolve);
+        }),
+    };
+}
+
+const routes = {
+    "/v1/magpie/quotas/cards": (request, response) => {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end(fixture("normal.json"));
+    },
+    "/missing": (request, response) => {
+        response.writeHead(404, { "Content-Type": "text/plain" });
+        response.end("404 page not found");
+    },
+    "/redirect": (request, response) => {
+        response.writeHead(302, { Location: "/v1/magpie/quotas/cards" });
+        response.end();
+    },
+    "/huge": (request, response) => {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        response.end("x".repeat(LIMIT + 1));
+    },
+    "/slow": (request, response) => {
+        response.writeHead(200, { "Content-Type": "application/json" });
+        setTimeout(() => response.end("{}"), TIMEOUT + 500);
+    },
+};
+
+test("未授权与离线一律返回未知", () => {
+    const unconfigured = call({ settings: { account: "自动选择" }, source: { status: "unconfigured" }, storage: null });
+    assert.equal(unconfigured.quota, null);
+    const offline = call({ settings: { account: "自动选择" }, source: { status: "offline" }, storage: null });
+    assert.equal(offline.quota, null);
+});
+
+test("正常响应只换算可用的百分比窗口", () => {
+    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
+    assert.equal(result.quota.windows.length, 1);
+    assert.equal(result.quota.windows[0].label, "Premium requests");
+    assert.equal(result.quota.windows[0].remaining_pct, 96.75);
+    assert.equal(result.quota.windows[0].reset_at, Math.floor(Date.parse("2026-12-01T00:00:00Z") / 1000));
+    assert.equal(result.storage.account, JSON.stringify(["", "copilot", "luongthimydieu", "education", "copilot"]));
+});
+
+test("自动选择会固定账号，不随返回顺序漂移", () => {
+    const first = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
+    const second = call({ settings: { account: "自动选择" }, source: ready(fixture("reordered.json")), storage: first.storage });
+    assert.equal(second.quota.windows[0].label, "Premium requests");
+    assert.equal(second.storage.account, first.storage.account);
+});
+
+test("固定账号报错时按未知处理，不换成别的账号", () => {
+    const first = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
+    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("pinned-error.json")), storage: first.storage });
+    assert.equal(result.quota, null);
+});
+
+test("固定账号消失后重新选择，并保留原存储的其他字段", () => {
+    const first = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
+    first.storage.note = "保留";
+    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("no-copilot.json")), storage: first.storage });
+    assert.deepEqual(result.quota.windows.map(window => window.label), ["5 hours", "Month"]);
+    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [57.03, 63.66]);
+    assert.equal(result.storage.note, "保留");
+    assert.equal(result.storage.account, JSON.stringify(["", "kimi", "", "", "kimi code"]));
+});
+
+test("unlimited、text、钱包窗口不换算，超额按 0 剩余", () => {
+    const unlimited = call({ settings: { account: "自动选择" }, source: ready(fixture("unlimited-only.json")), storage: null });
+    assert.equal(unlimited.quota, null);
+
+    const mixed = call({ settings: { account: "自动选择" }, source: ready(fixture("text-and-unlimited.json")), storage: null });
+    assert.equal(mixed.quota.windows.length, 1);
+    assert.equal(mixed.quota.windows[0].label, "已用超额");
+    assert.equal(mixed.quota.windows[0].remaining_pct, 0);
+});
+
+test("窗口名称按宿主规则截断并去掉控制字符", () => {
+    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("long-label.json")), storage: null });
+    const label = result.quota.windows[0].label;
+    assert.equal(Array.from(label).length, 40);
+    assert.ok(!/[\u0000-\u001f\u007f-\u009f]/.test(label));
+});
+
+test("空数据与坏响应按未知处理", () => {
+    assert.equal(call({ settings: {}, source: ready(fixture("empty.json")), storage: null }).quota, null);
+    assert.equal(call({ settings: {}, source: ready(fixture("malformed.txt")), storage: null }).quota, null);
+    assert.equal(call({ settings: {}, source: ready("{}"), storage: null }).quota, null);
+    assert.equal(call({ settings: {}, source: ready('{"data":{}}'), storage: null }).quota, null);
+});
+
+test("设置可以指定一个账号", () => {
+    const result = call({ settings: { account: "workbuddy" }, source: ready(fixture("normal.json")), storage: { note: "原有" } });
+    assert.deepEqual(result.quota.windows.map(window => window.label), ["Credits", "Extra credits", "Total credits"]);
+    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [0, 83.98, 65.72]);
+    assert.equal(result.storage.note, "原有");
+    assert.equal(result.storage.account, undefined);
+
+    const mixedCase = call({ settings: { account: "Copilot" }, source: ready(fixture("normal.json")), storage: null });
+    assert.equal(mixedCase.quota.windows.length, 1);
+
+    const missing = call({ settings: { account: "没有这个账号" }, source: ready(fixture("normal.json")), storage: null });
+    assert.equal(missing.quota, null);
+});
+
+test("本机回环读取：正常、404、重定向、超限、超时", async t => {
+    const server = await serve(routes);
+    t.after(() => server.close());
+
+    const source = await readLoopback(server.base + "/v1/magpie/quotas/cards");
+    assert.equal(source.status, "ready");
+    assert.ok(source.text.length < LIMIT);
+    const result = call({ settings: { account: "自动选择" }, source, storage: null });
+    assert.equal(result.quota.windows[0].remaining_pct, 96.75);
+
+    for (const route of ["/missing", "/redirect", "/huge", "/slow"]) {
+        const failed = await readLoopback(server.base + route);
+        assert.equal(failed.status, "offline", route);
+        assert.equal(call({ settings: {}, source: failed, storage: null }).quota, null, route);
+    }
+});
+
+test("连接拒绝按离线处理", async () => {
+    const server = http.createServer();
+    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+    const port = server.address().port;
+    await new Promise(resolve => server.close(resolve));
+    const source = await readLoopback(`http://127.0.0.1:${port}/v1/magpie/quotas/cards`);
+    assert.equal(source.status, "offline");
+    assert.equal(call({ settings: {}, source, storage: null }).quota, null);
+});
+
+test("本机 magpie 实况", { skip: process.env.MAGPIE_LIVE !== "1" }, async () => {
+    const started = Date.now();
+    const source = await readLoopback("http://127.0.0.1:3425/v1/magpie/quotas/cards");
+    const elapsed = Date.now() - started;
+    if (source.status !== "ready") {
+        console.log("本机 magpie 未运行，跳过实况读取");
+        return;
+    }
+    console.log(`实况读取 ${Buffer.byteLength(source.text)} 字节，${elapsed} 毫秒`);
+    assert.ok(Buffer.byteLength(source.text) <= LIMIT);
+    assert.ok(elapsed < TIMEOUT);
+    const result = call({ settings: { account: "自动选择" }, source, storage: null });
+    if (result.quota) {
+        assert.ok(result.quota.windows.length >= 1 && result.quota.windows.length <= 3);
+        for (const window of result.quota.windows) {
+            assert.ok(window.label.length > 0 && Array.from(window.label).length <= 40);
+            assert.ok(window.remaining_pct >= 0 && window.remaining_pct <= 100);
+        }
+    }
+});

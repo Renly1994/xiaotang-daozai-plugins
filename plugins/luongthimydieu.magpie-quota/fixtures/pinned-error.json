@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "provider": "copilot",
+      "name": "Copilot",
+      "plan": "Education",
+      "user": "luongthimydieu",
+      "windows": [],
+      "error": "读取失败",
+      "kind": "subscription"
+    },
+    {
+      "provider": "workbuddy",
+      "name": "WorkBuddy",
+      "user": "jinnn",
+      "windows": [
+        {"name": "Credits", "used": 6.402, "resetsAt": "2026-11-30T15:59:59Z", "display": "32.01 / 500", "amount": 32.01, "limit": 500, "unit": "credits"}
+      ],
+      "kind": "subscription"
+    }
+  ],
+  "object": "list"
+}
