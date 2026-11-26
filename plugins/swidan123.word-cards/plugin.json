@@ -1,0 +1,135 @@
+{
+  "id": "swidan123.word-cards",
+  "name": "随手背词",
+  "titleAccent": "背词",
+  "author": "swidan123",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "navigationIcon": {
+    "path": "M5 6.5 C5 5.5 6 5 7 5 H11.5 V19 H7 C6 19 5 18.5 5 17.5 Z M19 6.5 C19 5.5 18 5 17 5 H12.5 V19 H17 C18 19 19 18.5 19 17.5 Z",
+    "background": "#4C8BF5"
+  },
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "action",
+    "event",
+    "notice",
+    "storage",
+    "island.pinned",
+    "settings",
+    "timer"
+  ],
+  "events": [
+    "focus.finished"
+  ],
+  "dataVersion": 1,
+  "permissions": {},
+  "network": {
+    "hosts": [
+      "dict.youdao.com"
+    ]
+  },
+  "refreshSeconds": 180,
+  "data": [
+    "words.json"
+  ],
+  "settings": [
+    {
+      "key": "book",
+      "label": "默认词书",
+      "type": "choice",
+      "default": "ielts",
+      "choices": [
+        { "value": "ielts", "label": "雅思 / 考研高频" },
+        { "value": "cet", "label": "四六级核心" },
+        { "value": "tech", "label": "科研 / 程序员英语" },
+        { "value": "custom", "label": "自建生词本" }
+      ]
+    },
+    {
+      "key": "default_mode",
+      "label": "默认练习模式",
+      "type": "choice",
+      "default": "flash",
+      "choices": [
+        { "value": "flash", "label": "闪卡自测（点击翻义）" },
+        { "value": "choice", "label": "四选一测验（看词选义）" },
+        { "value": "spell", "label": "键盘拼写（看义默写）" }
+      ]
+    },
+    {
+      "key": "daily_goal",
+      "label": "每日目标词数",
+      "type": "number",
+      "default": "20",
+      "min": 5,
+      "max": 100,
+      "step": 5,
+      "precision": 0
+    },
+    {
+      "key": "pinned_mode",
+      "label": "顶部常驻",
+      "type": "choice",
+      "default": "word_cn",
+      "choices": [
+        { "value": "word_cn", "label": "单词 + 简短释义" },
+        { "value": "word_only", "label": "仅显示单词" },
+        { "value": "progress", "label": "今日进度与待复习" },
+        { "value": "off", "label": "关闭常驻" }
+      ]
+    },
+    {
+      "key": "voice_accent",
+      "label": "朗读口音",
+      "type": "choice",
+      "default": "us",
+      "choices": [
+        { "value": "us", "label": "美音 (US)" },
+        { "value": "uk", "label": "英音 (UK)" }
+      ]
+    },
+    {
+      "key": "focus_push",
+      "label": "番茄专注结束推送一词",
+      "type": "switch",
+      "default": "true"
+    },
+    {
+      "key": "custom_words",
+      "label": "自建生词本",
+      "type": "list",
+      "default": "[]",
+      "maxItems": 20,
+      "item": [
+        { "key": "word", "label": "英文单词", "type": "text", "default": "serendipity" },
+        { "key": "meaning", "label": "中文释义", "type": "text", "default": "n. 意外发现珍奇事物的运气" },
+        { "key": "example", "label": "例句（选填）", "type": "text", "default": "无" }
+      ]
+    }
+  ],
+  "statusLayout": {
+    "components": [
+      { "type": "canvas" },
+      { "type": "fields" }
+    ],
+    "canvasFields": [
+      {
+        "key": "spell",
+        "rect": [14, 134, 286, 26],
+        "placeholder": "输入英文拼写后回车…",
+        "action": "submit-spell"
+      }
+    ],
+    "style": {
+      "accent": "#5B9BFF",
+      "icon": "calendar",
+      "surface": "plain"
+    }
+  }
+}
