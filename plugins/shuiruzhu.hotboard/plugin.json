@@ -13,7 +13,6 @@
   "dataVersion": 1,
   "permissions": { "source.read": "https" },
   "refreshSeconds": 1800,
-  "homepage": "https://github.com/shuiruzhu/daozai-agent",
   "network": {
     "hosts": ["top.baidu.com", "api.bilibili.com", "www.bilibili.com", "oshwhub.com"],
     "sources": [
