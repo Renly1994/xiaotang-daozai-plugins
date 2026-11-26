@@ -8,7 +8,7 @@
 node --test .\fixtures\test.cjs
 ```
 
-设置 `MAGPIE_LIVE=1` 可额外读取本机 magpie，核对真实响应的大小与耗时：
+设置 `MAGPIE_LIVE=1` 可额外读取本机 magpie 的 `cards` 与旧端点 `quotas`，核对真实响应的大小、耗时与读数：
 
 ```powershell
 $env:MAGPIE_LIVE = '1'
@@ -22,6 +22,9 @@ Remove-Item Env:MAGPIE_LIVE
 | --- | --- |
 | `unconfigured` / `offline` | `quota` 为 `null`，不产生读数 |
 | `normal.json` | 选中 Copilot 的 `Premium requests`，`remaining_pct` 为 `92.75`，`reset_at` 与 `resetsAt` 一致 |
+| `legacy-quotas.json`（旧端点形态） | 直接采用 `remaining`；未知字段 `holdsWhy`、`runsOut` 等被忽略；条目缺少 `plan`/`kind` 时不报错 |
+| `remaining` 与 `used` 冲突、越界或类型异常 | 有效的 `remaining` 优先；否则用 `100 - used`；都无效时跳过该窗口 |
+| `api-index.json`（只填到 `/v1` 的接口索引） | 返回 `null`，页签隐藏 |
 | 返回顺序、套餐或显示名称变化 | 继续读取已固定的同一账号 |
 | 多个账号使用同一厂商名或固定身份不明确 | 额度按未知处理，保持原固定账号 |
 | 仍有不足 1% 的额度 | 返回正的小数，岛仔显示 <1% |
@@ -45,12 +48,26 @@ $daozai = 'D:/你的目录/daozai.exe'
 $LASTEXITCODE
 ```
 
-`--plugin-test` 运行时数据源为 `unconfigured`，入口应返回 `{"quota":null,...}` 且不报错。随后在「设置 → 插件 → 已安装 → 开发者工具」选择 `plugin.json` 试装，启用并授权 [README 中的本机地址](README.md#启用)，再到「AI 额度」核对：
+`--plugin-test` 运行时数据源为 `unconfigured`，入口应返回 `{"quota":null,...}` 且不报错。
+
+也可用 `--input` 喂入一份响应文本，核对不同地址形态。下面取旧端点 `http://127.0.0.1:3425/v1/magpie/quotas?kept=1` 的实时响应并包装成宿主输入：
+
+```powershell
+$text = (curl.exe -s --noproxy '*' 'http://127.0.0.1:3425/v1/magpie/quotas?kept=1') -join "`n"
+$json = @{ sources = @{ default = @{ status = 'ready'; text = $text } } } | ConvertTo-Json -Depth 5 -Compress
+[IO.File]::WriteAllText("$env:TEMP\magpie-input.json", $json)
+& $daozai --plugin-test "$PWD\plugin.json" --input "$env:TEMP\magpie-input.json"
+```
+
+输出应包含窗口（旧端点会直接采用 `remaining`）。把地址换成 `http://127.0.0.1:3425/v1` 的接口索引时，输出应为 `{"quota":null,...}`，与只授权到 `/v1` 的现象一致。
+
+随后在「设置 → 插件 → 已安装 → 开发者工具」选择 `plugin.json` 试装，启用并授权 [README 中的本机地址](README.md#启用)，再到「AI 额度」核对：
 
 | 本机状态 | 预期 |
 | --- | --- |
 | magpie 正在运行 | 出现「magpie 额度」页签，显示自动选中账号的一个到三个窗口 |
 | magpie 未运行 | 来源页签隐藏 |
-| 旧版 magpie（无 `/quotas/cards`） | 宿主收到 404，来源页签隐藏 |
+| 授权地址只填到 `http://127.0.0.1:3425/v1` | 拿到接口索引，来源页签隐藏；改填完整地址后恢复 |
+| 旧版 magpie（无 `/quotas/cards`）改填 `/v1/magpie/quotas` | 正常显示，`remaining` 直接作为剩余百分比 |
 | 设置填写 `WorkBuddy` | 换成 WorkBuddy 的前三个窗口 |
 | 停用插件 | 页签撤下，其他来源不变 |

@@ -132,6 +132,44 @@ test("正常响应只换算可用的百分比窗口", () => {
     assert.equal(result.storage.account, JSON.stringify(["copilot", "demo-copilot", "subscription"]));
 });
 
+test("旧端点响应的 remaining 直接作为剩余百分比", () => {
+    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("legacy-quotas.json")), storage: null });
+    assert.deepEqual(result.quota.windows.map(window => window.label), ["Premium requests"]);
+    assert.equal(result.quota.windows[0].remaining_pct, 96.75);
+    assert.equal(result.quota.windows[0].reset_at, Math.floor(Date.parse("2026-12-01T00:00:00Z") / 1000));
+    assert.equal(result.storage.account, JSON.stringify(["copilot", "demo-copilot", "subscription"]));
+
+    // 旧端点条目可能缺少 plan、kind，并带上 holdsWhy、runsOut 等未知字段。
+    const workbuddy = call({ settings: { account: "workbuddy" }, source: ready(fixture("legacy-quotas.json")), storage: null });
+    assert.deepEqual(workbuddy.quota.windows.map(window => window.label), ["Credits", "Extra credits", "Total credits"]);
+    assert.deepEqual(workbuddy.quota.windows.map(window => window.remaining_pct), [0, 78.76, 62.36]);
+});
+
+test("remaining 与 used 冲突或形态异常时的取舍", () => {
+    const windows = [
+        { name: "冲突", used: 40, remaining: 55 },
+        { name: "剩余越界", used: 40, remaining: 140 },
+        { name: "剩余为字符串", used: 40, remaining: "55" },
+    ];
+    const source = ready(JSON.stringify({ data: [{ provider: "p", user: "u", windows }] }));
+    const result = call({ settings: { account: "自动选择" }, source, storage: null });
+    assert.deepEqual(result.quota.windows.map(window => window.label), ["冲突", "剩余越界", "剩余为字符串"]);
+    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [55, 60, 60]);
+
+    const onlyRemaining = call({
+        settings: { account: "自动选择" },
+        source: ready(JSON.stringify({ data: [{ provider: "p", user: "u", windows: [{ name: "只有剩余", remaining: 30 }, { name: "无读数", remaining: null }] }] })),
+        storage: null,
+    });
+    assert.deepEqual(onlyRemaining.quota.windows.map(window => window.label), ["只有剩余"]);
+    assert.equal(onlyRemaining.quota.windows[0].remaining_pct, 30);
+});
+
+test("授权地址只填到 /v1 时拿到接口索引，按未知处理", () => {
+    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("api-index.json")), storage: null });
+    assert.equal(result.quota, null);
+});
+
 test("自动选择会固定账号，不随返回顺序漂移", () => {
     const first = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
     const second = call({ settings: { account: "自动选择" }, source: ready(fixture("reordered.json")), storage: first.storage });
@@ -309,6 +347,17 @@ test("连接拒绝按离线处理", async () => {
     assert.equal(call({ settings: {}, source, storage: null }).quota, null);
 });
 
+function assertQuotaShape(result) {
+    if (!result.quota) {
+        return;
+    }
+    assert.ok(result.quota.windows.length >= 1 && result.quota.windows.length <= 3);
+    for (const window of result.quota.windows) {
+        assert.ok(window.label.length > 0 && Array.from(window.label).length <= 40);
+        assert.ok(window.remaining_pct >= 0 && window.remaining_pct <= 100);
+    }
+}
+
 test("本机 magpie 实况", { skip: process.env.MAGPIE_LIVE !== "1" }, async () => {
     const started = Date.now();
     const source = await readLoopback("http://127.0.0.1:3425/v1/magpie/quotas/cards");
@@ -320,12 +369,15 @@ test("本机 magpie 实况", { skip: process.env.MAGPIE_LIVE !== "1" }, async ()
     console.log(`实况读取 ${Buffer.byteLength(source.text)} 字节，${elapsed} 毫秒`);
     assert.ok(Buffer.byteLength(source.text) <= LIMIT);
     assert.ok(elapsed < TIMEOUT);
-    const result = call({ settings: { account: "自动选择" }, source, storage: null });
-    if (result.quota) {
-        assert.ok(result.quota.windows.length >= 1 && result.quota.windows.length <= 3);
-        for (const window of result.quota.windows) {
-            assert.ok(window.label.length > 0 && Array.from(window.label).length <= 40);
-            assert.ok(window.remaining_pct >= 0 && window.remaining_pct <= 100);
-        }
+    assertQuotaShape(call({ settings: { account: "自动选择" }, source, storage: null }));
+
+    // 旧端点：窗口里额外带 remaining，本插件应直接采用。
+    const legacy = await readLoopback("http://127.0.0.1:3425/v1/magpie/quotas?kept=1");
+    if (legacy.status !== "ready") {
+        console.log("旧端点不可用，跳过实况读取");
+        return;
     }
+    console.log(`旧端点读取 ${Buffer.byteLength(legacy.text)} 字节`);
+    assert.ok(Buffer.byteLength(legacy.text) <= LIMIT);
+    assertQuotaShape(call({ settings: { account: "自动选择" }, source: legacy, storage: null }));
 });

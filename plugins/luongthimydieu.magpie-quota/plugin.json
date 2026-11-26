@@ -2,7 +2,7 @@
   "id": "luongthimydieu.magpie-quota",
   "name": "magpie 额度",
   "author": "luongthimydieu",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",

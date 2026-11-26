@@ -6,10 +6,16 @@
 
 ## 启用
 
-需要使用支持 `GET /v1/magpie/quotas/cards` 的 Magpie 版本。安装插件后，在「设置 → 插件 → 已安装」启用，再选择「授权数据源」并填写本机地址：
+安装插件后，在「设置 → 插件 → 已安装」启用，再选择「授权数据源」并填写本机的完整地址：
 
 ```text
 http://127.0.0.1:3425/v1/magpie/quotas/cards
+```
+
+较旧的 magpie 没有 `/quotas/cards` 时，可改填旧端点（窗口里带 `remaining`，插件直接采用）：
+
+```text
+http://127.0.0.1:3425/v1/magpie/quotas
 ```
 
 授权后打开「AI 额度」面板，按插件名称「magpie 额度」找到来源页签。插件设置中的「账号」默认为「自动选择」，也可填写 magpie 里的厂商、显示名或登录名。匹配到多个账号时额度按未知处理，请填写能唯一匹配的登录名或自定义显示名。
@@ -18,11 +24,21 @@ Magpie 未运行、数据源未授权、接口不可用或额度未知时，岛�
 
 ## 来源与范围
 
-- 数据来自 [magpie](https://github.com/yetone/magpie)（MIT）的本机只读接口 `GET /v1/magpie/quotas/cards`。该接口只返回 magpie 上次读到的缓存，一次刷新只请求一次，不读取 magpie 保存的任何凭据，也不触发 magpie 向上游刷新。插件不接触 API Key、Cookie 或登录文件。
+- 数据来自 [magpie](https://github.com/yetone/magpie)（MIT）的本机只读接口 `GET /v1/magpie/quotas/cards`；旧版 magpie 可用 `GET /v1/magpie/quotas`。两个接口只返回 magpie 上次读到的缓存，一次刷新只请求一次，不读取 magpie 保存的任何凭据，也不触发 magpie 向上游刷新。插件不接触 API Key、Cookie 或登录文件。
 - 插件走 SDK 的本机回环数据源，由宿主直连 `127.0.0.1`，不经过系统代理，不带转发头；读取上限沿用宿主的 128 KiB / 2 秒。
-- `windows[].used` 是已用量百分比，插件换算为 `remaining_pct = 100 - used`（取值范围 0 到 100）。`resetsAt` 换算为 Unix 秒的 `reset_at`。
+- 窗口的剩余百分比优先取 `windows[].remaining`（旧端点直接给出，0 到 100）；没有该字段时用 `remaining_pct = 100 - used` 换算（`cards` 端点的形态）。`resetsAt` 换算为 Unix 秒的 `reset_at`，`holdsWhy`、`runsOut` 等不认识的字段忽略。
 - 首版只展示一个账号、最多三个窗口。`unlimited` 窗口没有上限，`text` 窗口只有厂商文字，`balance` 是钱包余额（`used` 不是读数），这三类都不换算、不显示；因此只有无限额窗口的账号会显示为未知。
 - 条目级 `error`、`pluginError` 或 `readError` 非空时，该账号本次数据不可信，按未知处理。旧版 magpie 没有 `/quotas/cards` 时，宿主读到 404，同样按未知处理。
 - 窗口名称原样展示，按宿主上限截断到 40 字并去掉控制字符；不猜测或改写 magpie 的窗口名与重置时间。
 
 接口协议和数据结构属于 [yetone/magpie](https://github.com/yetone/magpie) 项目；岛仔由 [Renly1994](https://github.com/Renly1994) 维护。本插件为社区投稿，与上述两个项目没有隶属关系。
+
+## 常见问题
+
+**授权后页签不出现，怎么检查地址？**
+
+「授权数据源」必须填写**完整地址**，例如 `http://127.0.0.1:3425/v1/magpie/quotas/cards`。只填到 `http://127.0.0.1:3425/v1` 时，magpie 返回的是接口索引（`{"apis":[...]}`），里面没有账号数据，插件按额度未知处理，页签因此隐藏。旧端点 `http://127.0.0.1:3425/v1/magpie/quotas` 也可以使用。
+
+**页签仍不出现？**
+
+确认 magpie 正在运行，并在浏览器打开所填地址能看到 `data` 数组；再检查插件设置里的「账号」是否匹配到了多个账号（此时按未知处理，改填登录名或自定义显示名）。magpie 未运行或未授权时，页签同样隐藏。

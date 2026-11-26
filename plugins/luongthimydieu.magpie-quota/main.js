@@ -23,8 +23,9 @@ SOFTWARE.
 */
 
 // magpie 额度来源：只读本机 magpie 的额度缓存，取一个账号展示。
-// 取数地址由用户在「授权数据源」中选择：
-//   http://127.0.0.1:3425/v1/magpie/quotas/cards
+// 取数地址由用户在「授权数据源」中选择，需填写完整地址：
+//   http://127.0.0.1:3425/v1/magpie/quotas/cards（新端点）
+//   http://127.0.0.1:3425/v1/magpie/quotas（旧端点，窗口里带 remaining）
 // 只请求一次；不读凭据，也不触发 magpie 向上游刷新。
 
 const MAX_WINDOWS = 3;
@@ -154,19 +155,27 @@ function mapWindow(window, index) {
     if (window.unlimited === true || window.text === true || typeof window.balance === "number") {
         return null;
     }
+    // 旧端点 /v1/magpie/quotas 直接给出剩余百分比，cards 只给已用百分比。
+    // 两者都存在时以 remaining 为准；未知字段（holdsWhy、runsOut 等）一律忽略。
+    const remaining = remainingPct(window.remaining);
     const used = window.used;
-    if (typeof used !== "number" || !Number.isFinite(used) || used < 0) {
+    if (remaining === null && (typeof used !== "number" || !Number.isFinite(used) || used < 0)) {
         return null;
     }
     const mapped = {
         label: cleanLabel(window.name, "额度 " + (index + 1)),
-        remaining_pct: Math.max(0, 100 - used),
+        remaining_pct: remaining !== null ? remaining : Math.max(0, 100 - used),
     };
     const reset = timestamp(window.resetsAt);
     if (reset !== null) {
         mapped.reset_at = reset;
     }
     return mapped;
+}
+
+// 只接受 0 到 100 的有限数值；其他形态（字符串、越界、NaN）按缺失处理。
+function remainingPct(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
 }
 
 function parseCards(text) {
