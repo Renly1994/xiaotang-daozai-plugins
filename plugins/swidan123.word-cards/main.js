@@ -75,19 +75,26 @@ function text(value, x, y, size, options = {}) {
     return { text: value, at: [x, y], size, ...options };
 }
 
+function clampChars(str, max) {
+    return [...str].slice(0, max).join("");
+}
+
 function parseCustomWords(raw) {
     try {
         const parsed = typeof raw === "string" ? JSON.parse(raw) : Array.isArray(raw) ? raw : [];
         if (!Array.isArray(parsed)) return [];
-        const out = [];
+        const byLower = new Map();
         for (const row of parsed) {
-            const w = cleanText(row?.word);
-            const m = cleanText(row?.meaning);
-            const rawEx = cleanText(row?.example);
+            const w = clampChars(cleanText(row?.word), 40);
+            const m = clampChars(cleanText(row?.meaning), 80);
+            const rawEx = clampChars(cleanText(row?.example), 160);
             const e = rawEx === "无" ? "" : rawEx;
-            if (w && m) out.push({ w, p: "", m, e });
+            if (w && m) {
+                // 同词按大小写不敏感去重，保留后录入的释义，保证 customList 与 allMap 语义一致
+                byLower.set(w.toLowerCase(), { w, p: "", m, e });
+            }
         }
-        return out;
+        return [...byLower.values()];
     } catch {
         return [];
     }
@@ -156,22 +163,44 @@ function pickNextWord(list, srs, nowSec, currentWord) {
     return soonIdx;
 }
 
+function wordHash(word) {
+    let h = 2166136261;
+    const str = String(word ?? "");
+    for (let i = 0; i < str.length; i++) {
+        h = Math.imul(h ^ str.charCodeAt(i), 16777619) >>> 0;
+    }
+    return h.toString(16);
+}
+
+function choiceDisplayLabel(meaning) {
+    return truncateUnits(shortMeaning(meaning), 22);
+}
+
+function normalizeChoiceLabel(label) {
+    return cleanText(label).toLowerCase();
+}
+
 function buildChoiceOptions(item, list, allMap) {
     if (!item) return [];
-    const seen = new Set([item.w]);
+    const correctDisplay = choiceDisplayLabel(item.m);
+    const seenWords = new Set([item.w]);
+    const seenLabels = new Set([normalizeChoiceLabel(correctDisplay)]);
     const candidates = [];
     const appendFrom = source => {
         for (const row of source) {
-            if (row?.w && !seen.has(row.w)) {
-                seen.add(row.w);
-                candidates.push(row);
-            }
+            if (!row?.w || seenWords.has(row.w)) continue;
+            const display = choiceDisplayLabel(row.m);
+            const norm = normalizeChoiceLabel(display);
+            if (!norm || seenLabels.has(norm)) continue;
+            seenWords.add(row.w);
+            seenLabels.add(norm);
+            candidates.push({ w: row.w, label: display, correct: false });
         }
     };
     appendFrom(list);
     if (candidates.length < 3) appendFrom(allMap.values());
 
-    // 基于单词生成确定性伪随机序列，先排除正确答案并去重后再洗牌抽取 3 个干扰项
+    // 基于单词生成确定性伪随机序列，先排除正确答案并按最终显示释义去重后再洗牌抽取 3 个干扰项
     let seed = 2166136261;
     for (let i = 0; i < item.w.length; i++) {
         seed = Math.imul(seed ^ item.w.charCodeAt(i), 16777619) >>> 0;
@@ -185,8 +214,8 @@ function buildChoiceOptions(item, list, allMap) {
         [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
     const choices = [
-        { w: item.w, label: shortMeaning(item.m), correct: true },
-        ...candidates.slice(0, 3).map(o => ({ w: o.w, label: shortMeaning(o.m), correct: false }))
+        { w: item.w, label: correctDisplay, correct: true },
+        ...candidates.slice(0, 3)
     ];
     for (let i = choices.length - 1; i > 0; i--) {
         const j = nextRand() % (i + 1);
@@ -245,7 +274,13 @@ function computeState(input) {
 
     const srs = {};
     for (const [k, v] of Object.entries(storage?.srs ?? {})) {
-        if (v && typeof v === "object") srs[k] = { ...v };
+        if (allMap.has(k) && v && typeof v === "object") {
+            srs[k] = {
+                lv: Number.isInteger(v.lv) ? v.lv : 0,
+                due: Number.isFinite(v.due) ? v.due : 0,
+                err: Number.isInteger(v.err) ? v.err : 0
+            };
+        }
     }
     let mistakes = Array.isArray(storage?.mistakes) ? [...new Set(storage.mistakes)].filter(w => allMap.has(w)) : [];
     let dailyDate = today;
@@ -256,7 +291,9 @@ function computeState(input) {
     let lastFocusId = storage?.lastFocusId ?? null;
     let revealed = storage?.revealed === true;
     let spellHint = Number.isInteger(storage?.spellHint) ? storage.spellHint : 0;
-    let wrongChoice = typeof storage?.wrongChoice === "string" ? storage.wrongChoice : "";
+    let wrongIndices = Array.isArray(storage?.wrongIndices)
+        ? storage.wrongIndices.filter(n => Number.isInteger(n) && n >= 0 && n < 4)
+        : [];
     let feedback = "";
     let feedbackTone = "muted";
     let currentWord = typeof storage?.currentWord === "string" ? storage.currentWord : "";
@@ -317,7 +354,7 @@ function computeState(input) {
         currentWord = currentIndex >= 0 ? list[currentIndex].w : "";
         revealed = false;
         spellHint = 0;
-        wrongChoice = "";
+        wrongIndices = [];
     };
 
     const act = action?.id ?? "";
@@ -334,7 +371,7 @@ function computeState(input) {
             mode = nextMode;
             revealed = false;
             spellHint = 0;
-            wrongChoice = "";
+            wrongIndices = [];
         }
     } else if (act === "flip") {
         revealed = !revealed;
@@ -348,17 +385,24 @@ function computeState(input) {
             advanceWord();
         }
     } else if (act.startsWith("pick-")) {
-        const pickedWord = act.slice(5);
-        if (currentWord && pickedWord === currentWord) {
-            applyReview(currentWord, "know");
-            feedback = `答对：${currentWord}`;
-            feedbackTone = "ok";
-            advanceWord();
-        } else if (currentWord) {
-            applyReview(currentWord, "forget");
-            wrongChoice = pickedWord;
-            feedback = "选错了，已加入错词本，再试一次";
-            feedbackTone = "err";
+        const pickedIdx = Number(act.slice(5));
+        const currentItem = currentIndex >= 0 ? list[currentIndex] : null;
+        const currentChoices = currentItem ? buildChoiceOptions(currentItem, list, allMap) : [];
+        const picked = Number.isInteger(pickedIdx) && pickedIdx >= 0 && pickedIdx < currentChoices.length
+            ? currentChoices[pickedIdx]
+            : null;
+        if (currentWord && picked) {
+            if (picked.correct) {
+                applyReview(currentWord, "know");
+                feedback = `答对：${currentWord}`;
+                feedbackTone = "ok";
+                advanceWord();
+            } else {
+                applyReview(currentWord, "forget");
+                if (!wrongIndices.includes(pickedIdx)) wrongIndices.push(pickedIdx);
+                feedback = "选错了，已加入错词本，再试一次";
+                feedbackTone = "err";
+            }
         }
     } else if (act === "submit-spell") {
         const typed = cleanText(action?.form?.spell ?? "");
@@ -375,21 +419,31 @@ function computeState(input) {
                 spellHint = Math.max(spellHint + 1, 1);
             }
         }
-    } else if (event?.name === "focus.finished" && event.id !== lastFocusId) {
-        lastFocusId = event.id;
-        if (focusPush && list.length) {
-            const idx = pickNextWord(list, srs, nowSec, "");
-            const pushItem = idx >= 0 ? list[idx] : list[0];
-            if (pushItem) {
-                currentIndex = idx >= 0 ? idx : 0;
-                currentWord = pushItem.w;
-                revealed = false;
-                const dueNow = formatDueCount(list, srs, nowSec);
-                notice = {
-                    id: `vocab-focus-${event.id}`,
-                    title: "专注结束 · 顺手背一词",
-                    body: `${pushItem.w} ${pushItem.p} · ${shortMeaning(pushItem.m)}${dueNow ? `（${dueNow}词待复习）` : ""}`
-                };
+    } else if (event?.name === "focus.finished") {
+        const rawEventId = event.id !== undefined && event.id !== null ? cleanText(String(event.id)) : "";
+        const focusEventKey = rawEventId
+            || (Number.isFinite(event.at) ? `at:${event.at}` : `ts:${nowSec}`);
+        if (focusEventKey !== lastFocusId) {
+            lastFocusId = focusEventKey;
+            if (focusPush) {
+                const ieltsList = Array.isArray(wordBank.ielts) && wordBank.ielts.length ? wordBank.ielts : null;
+                const pushList = list.length ? list : (ieltsList ?? [...allMap.values()]);
+                const idx = pickNextWord(pushList, srs, nowSec, "");
+                const pushItem = idx >= 0 ? pushList[idx] : pushList[0];
+                if (pushItem) {
+                    if (list.length) {
+                        currentIndex = idx >= 0 ? idx : 0;
+                        currentWord = pushItem.w;
+                        revealed = false;
+                        wrongIndices = [];
+                    }
+                    const dueNow = formatDueCount(pushList, srs, nowSec);
+                    notice = {
+                        id: `vocab-focus-${wordHash(focusEventKey)}-${focusEventKey.length}`,
+                        title: "专注结束 · 顺手背一词",
+                        body: `${pushItem.w}${pushItem.p ? " " + pushItem.p : ""} · ${shortMeaning(pushItem.m)}${dueNow ? `（${dueNow}词待复习）` : ""}`
+                    };
+                }
             }
         }
     } else if (!act && list.length && !revealed && mode === "flash") {
@@ -398,6 +452,7 @@ function computeState(input) {
         if (nextIdx >= 0) {
             currentIndex = nextIdx;
             currentWord = list[currentIndex].w;
+            wrongIndices = [];
         }
     }
 
@@ -429,7 +484,7 @@ function computeState(input) {
         streak,
         revealed,
         spellHint,
-        wrongChoice,
+        wrongIndices,
         choices,
         feedback,
         feedbackTone,
@@ -451,7 +506,7 @@ function computeState(input) {
             lastFocusId,
             revealed,
             spellHint,
-            wrongChoice,
+            wrongIndices,
             currentWord
         }
     };
@@ -625,7 +680,7 @@ function drawFlashMode(nodes, state) {
             cardNodes.push(text(line, 14, 141 + idx * 15, 9.8, { fill: "$muted", max_width: 359 }));
         });
     }
-    nodes.push({ id: "flash-" + item.w + "-" + (state.revealed ? "1" : "0"), group: cardNodes, animate: FADE });
+    nodes.push({ id: "flash-" + wordHash(item.w) + "-" + (state.revealed ? "1" : "0"), group: cardNodes, animate: FADE });
 
     const buttons = [
         { id: "forget", label: "不认识", x: 0, w: 123, bg: "#FF6B6B28", hover: "#FF6B6B48", fg: "#FF8787" },
@@ -665,22 +720,22 @@ function drawChoiceMode(nodes, state) {
         )
     );
 
-    // 2x2 四选一按钮
+    // 2x2 四选一按钮（统一使用符合 SDK 规范的内部 ID：choice-0..3 / pick-0..3）
     const labels = ["A", "B", "C", "D"];
     state.choices.slice(0, 4).forEach((opt, idx) => {
         const col = idx % 2;
         const row = Math.floor(idx / 2);
         const x = col * 198;
         const y = 118 + row * 48;
-        const isWrong = state.wrongChoice === opt.w;
+        const isWrong = state.wrongIndices.includes(idx);
         nodes.push(
             {
-                id: "choice-" + idx + "-" + opt.w,
+                id: "choice-" + idx,
                 rect: [x, y, 189, 41],
                 r: 8,
                 fill: isWrong ? "#FF6B6B32" : "$card",
                 hover: { fill: isWrong ? "#FF6B6B48" : "$track" },
-                hit: { action: "pick-" + opt.w }
+                hit: { action: "pick-" + idx }
             },
             { rect: [x + 8, y + 12, 18, 17], r: 4, fill: isWrong ? "#FF6B6B" : "$track" },
             text(labels[idx], x + 17, y + 24, 9.5, {
@@ -688,7 +743,7 @@ function drawChoiceMode(nodes, state) {
                 fill: isWrong ? "#FFFFFF" : "$muted",
                 weight: 700
             }),
-            text(truncateUnits(opt.label, 22), x + 33, y + 24.5, 10.5, {
+            text(opt.label, x + 33, y + 24.5, 10.5, {
                 fill: isWrong ? "#FF9B9B" : "$text",
                 weight: 600,
                 max_width: 148
@@ -824,6 +879,7 @@ function refresh(input) {
     };
     if (state.mode === "spell" && state.item) {
         status.fields = [{ key: "spell", label: "英文拼写", value: "", max: 40 }];
+        status.actions = [{ id: "submit-spell", label: "提交" }];
     }
     return {
         status,
@@ -835,5 +891,9 @@ function refresh(input) {
 }
 
 function action(input) {
+    return refresh(input);
+}
+
+function event(input) {
     return refresh(input);
 }
