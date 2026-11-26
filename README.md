@@ -24,4 +24,6 @@ python scripts/publish.py your.plugin-id --island 'D:/路径/daozai.exe' --mirro
 
 通过 Gitee 网页发布时，在命令末尾加 `--prepare 'D:/待发布/插件版本'`，读取当前线上索引并导出 ZIP 和待更新索引。按输出中的 SHA-256 核对 Gitee 上可公开下载的 ZIP，再提交同目录的 `catalog.json`。
 
+插件维护者可以先在投稿 PR 或对应反馈中提交建议简介，由仓库维护者审阅后在主分支的 `.github/plugin-descriptions.json` 为已审阅的官方或社区插件按插件 ID 登记；这不改变插件的官方标识或原始包。简介更新不需要提升版本：发布命令会在本地重新打包作校验，只要当前版本的 ZIP 与线上已发布的 ZIP 字节完全一致，就只更新 `catalog.json`。网页发布的 `--prepare` 模式请使用新的空目录；此时不导出新的 ZIP，核对已有公开 ZIP 后只上传新索引。
+
 统计服务上线后，预览和正式频道的发布命令都加 `--metrics`，在 ZIP 公开可下载后登记统计版本，再更新索引。使用网页发布时，运行导出的 `metrics.sql` 完成登记后再提交索引。[集市统计部署和上架登记](services/market-metrics/README.md)

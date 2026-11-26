@@ -114,7 +114,7 @@ def is_official(commit, plugin_id):
     return plugin_id in ids
 
 
-def official_description(commit, plugin_id):
+def reviewed_description(commit, plugin_id):
     path = ".github/plugin-descriptions.json"
     if not git(ROOT, "ls-tree", commit, "--", path):
         return None
@@ -140,7 +140,7 @@ def pack_reviewed(workspace, island, plugin_id, channel):
     if not isinstance(login, str) or len(login) > 39 or not LOGIN.fullmatch(login):
         raise ValueError(f"请在 GitHub 主分支的 .github/plugin-maintainers.json 登记 {plugin_id} 的维护者账号后再上架")
     official = is_official(commit, plugin_id)
-    description = official_description(commit, plugin_id) if official else None
+    description = reviewed_description(commit, plugin_id)
     source = workspace / "package"
     source.mkdir()
     for name, data in files.items():
@@ -152,15 +152,18 @@ def pack_reviewed(workspace, island, plugin_id, channel):
     return commit, manifest["version"], bundle, official, description
 
 
-def mark_official(index, plugin_id, description=None):
+def apply_presentation(index, plugin_id, official=False, description=None):
+    if not official and description is None:
+        return index
     catalog = json.loads(index)
     entry = next(entry for entry in catalog["plugins"] if entry["id"] == plugin_id)
     details = entry.get("presentation") or {}
-    if details.get("official") is True and (
+    if (not official or details.get("official") is True) and (
         description is None or details.get("description") == description
     ):
         return index
-    details["official"] = True
+    if official:
+        details["official"] = True
     if description is not None:
         details["description"] = description
     entry["presentation"] = details
@@ -181,12 +184,12 @@ def stage_catalog(bundle, staged, original, island, plugin_id, current, data,
             if (previous["version"] != current or previous["size"] != len(data)
                     or previous["sha256"] != hashlib.sha256(data).hexdigest()):
                 raise ValueError("已上架版本不可覆盖，发布新包须提高版本号")
-            index = mark_official(original, plugin_id, description) if official else original
-            return index if index != original else None
+            index = apply_presentation(original, plugin_id, official, description)
+            return (index if index != original else None), True
         staged.write_bytes(original)
     daozai(island, "--plugin-submit", bundle, staged)
     index = staged.read_bytes()
-    return mark_official(index, plugin_id, description) if official else index
+    return apply_presentation(index, plugin_id, official, description), False
 
 
 def read_mirror_file(path, limit):
@@ -258,8 +261,12 @@ def publish(island, plugin_id, mirror_url, channel, prepare=None, metrics=False)
 
         if previous_zip is not None and previous_zip != data:
             raise ValueError("该版本已有不同的安装包，请提高版本号")
-        index = stage_catalog(bundle, workspace / "catalog.json", original, island,
-                              plugin_id, current, data, official=official, description=description)
+        index, catalog_only = stage_catalog(
+            bundle, workspace / "catalog.json", original, island, plugin_id, current,
+            data, official=official, description=description,
+        )
+        if catalog_only and previous_zip is None:
+            raise ValueError("线上索引已存在但缺少对应安装包，不能仅更新索引")
         if index is None:
             verify_public_package(base_url, zip_remote, data)
             if registration is not None:
@@ -273,7 +280,11 @@ def publish(island, plugin_id, mirror_url, channel, prepare=None, metrics=False)
 
         if prepare is not None:
             prepare.mkdir(parents=True, exist_ok=True)
-            write_prepared(prepare, zip_name, data)
+            if catalog_only:
+                verify_public_package(base_url, zip_remote, data)
+                print("仅更新集市目录：沿用已公开的安装包，不重新上传 ZIP。")
+            else:
+                write_prepared(prepare, zip_name, data)
             write_prepared(prepare, "catalog.json", index)
             if registration is not None:
                 write_prepared(prepare, "metrics.sql", registration)
@@ -290,11 +301,12 @@ def publish(island, plugin_id, mirror_url, channel, prepare=None, metrics=False)
         if registration is not None:
             register_metrics(workspace / "metrics.sql", registration)
         catalog.write_bytes(index)
-        git_commit_push(mirror, catalog_remote, f"上架 {plugin_id} {current}")
+        action = "更新目录" if catalog_only else "上架"
+        git_commit_push(mirror, catalog_remote, f"{action} {plugin_id} {current}")
         print(f"{plugin_id} {current} 已发布到 {channel} 目录")
 
 
-if __name__ == "__main__":
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("plugin_id")
     parser.add_argument("--island", type=Path, required=True, help="岛仔作者命令可执行文件")
@@ -302,9 +314,13 @@ if __name__ == "__main__":
     parser.add_argument("--channel", choices=("preview", "stable"), required=True)
     parser.add_argument("--prepare", type=Path, help="导出待发布文件的目录")
     parser.add_argument("--metrics", action="store_true", help="推送索引前登记统计版本，导出模式生成 metrics.sql")
-    options = parser.parse_args()
+    options = parser.parse_args(argv)
     try:
         publish(options.island.resolve(strict=True), options.plugin_id, options.mirror,
                 options.channel, options.prepare, options.metrics)
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))
+
+
+if __name__ == "__main__":
+    main()
