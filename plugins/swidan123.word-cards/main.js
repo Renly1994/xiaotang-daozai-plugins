@@ -158,25 +158,38 @@ function pickNextWord(list, srs, nowSec, currentWord) {
 
 function buildChoiceOptions(item, list, allMap) {
     if (!item) return [];
-    const pool = list.length >= 4 ? list : [...allMap.values()];
-    const others = [];
-    // 确定性伪随机挑选 3 个干扰项（基于单词字符和）
-    let seed = 0;
-    for (let i = 0; i < item.w.length; i++) seed = (seed * 31 + item.w.charCodeAt(i)) % 9973;
-    const n = pool.length;
-    for (let step = 0; step < n && others.length < 3; step++) {
-        const candidate = pool[(seed + step * 7 + 3) % n];
-        if (candidate && candidate.w !== item.w && !others.some(o => o.w === candidate.w)) {
-            others.push(candidate);
+    const seen = new Set([item.w]);
+    const candidates = [];
+    const appendFrom = source => {
+        for (const row of source) {
+            if (row?.w && !seen.has(row.w)) {
+                seen.add(row.w);
+                candidates.push(row);
+            }
         }
+    };
+    appendFrom(list);
+    if (candidates.length < 3) appendFrom(allMap.values());
+
+    // 基于单词生成确定性伪随机序列，先排除正确答案并去重后再洗牌抽取 3 个干扰项
+    let seed = 2166136261;
+    for (let i = 0; i < item.w.length; i++) {
+        seed = Math.imul(seed ^ item.w.charCodeAt(i), 16777619) >>> 0;
+    }
+    const nextRand = () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed;
+    };
+    for (let i = candidates.length - 1; i > 0; i--) {
+        const j = nextRand() % (i + 1);
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
     }
     const choices = [
         { w: item.w, label: shortMeaning(item.m), correct: true },
-        ...others.map(o => ({ w: o.w, label: shortMeaning(o.m), correct: false }))
+        ...candidates.slice(0, 3).map(o => ({ w: o.w, label: shortMeaning(o.m), correct: false }))
     ];
-    // 确定性洗牌
     for (let i = choices.length - 1; i > 0; i--) {
-        const j = (seed + i * 13) % (i + 1);
+        const j = nextRand() % (i + 1);
         [choices[i], choices[j]] = [choices[j], choices[i]];
     }
     return choices;
