@@ -3,7 +3,7 @@
   "name": "现货金价",
   "titleAccent": "金价",
   "author": "岛仔",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
@@ -14,14 +14,15 @@
   "permissions": {"source.read": "https"},
   "refreshSeconds": 300,
   "network": {
-    "hosts": ["xaus.com"],
+    "hosts": ["xaus.com", "qt.gtimg.cn"],
     "sources": [
       {"key": "usd", "url": "https://xaus.com/api/v1/spot?currency=USD&unit=oz&compact=1"},
-      {"key": "cny", "url": "https://xaus.com/api/v1/spot?currency=CNY&unit=gram&compact=1"}
+      {"key": "cny", "url": "https://xaus.com/api/v1/spot?currency=CNY&unit=gram&compact=1"},
+      {"key": "tencent", "url": "https://qt.gtimg.cn/utf8/q=hf_XAU,whUSDCNY"}
     ],
     "minRefreshSeconds": 60
   },
-  "attribution": {"label": "xaus.com"},
+  "attribution": {"label": "XAUS / 腾讯行情"},
   "settings": [
     {"key": "unit", "label": "计价单位", "type": "choice", "default": "cny", "choices": [{"value": "usd", "label": "美元 / 盎司"}, {"value": "cny", "label": "人民币 / 克"}]},
     {"key": "range", "label": "走势区间", "type": "choice", "default": "day", "choices": [{"value": "day", "label": "1日"}, {"value": "week", "label": "1周"}, {"value": "month", "label": "1月"}]},

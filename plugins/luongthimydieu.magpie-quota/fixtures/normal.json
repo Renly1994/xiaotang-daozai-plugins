@@ -1,0 +1,47 @@
+{
+  "data": [
+    {
+      "provider": "copilot",
+      "name": "Copilot",
+      "plan": "Demo plan",
+      "user": "demo-copilot",
+      "windows": [
+        {"name": "Premium requests", "used": 7.25, "resetsAt": "2026-12-15T00:00:00Z", "display": "29 / 400"},
+        {"unlimited": true, "name": "Chat requests", "used": 0, "display": "Unlimited"},
+        {"unlimited": true, "name": "Completions", "used": 0, "display": "Unlimited"}
+      ],
+      "kind": "subscription"
+    },
+    {
+      "provider": "zcode",
+      "name": "ZCode",
+      "user": "demo-zcode",
+      "windows": [],
+      "error": "示例账号没有可用套餐",
+      "pluginError": true,
+      "kind": "subscription"
+    },
+    {
+      "provider": "workbuddy",
+      "name": "WorkBuddy",
+      "plan": "Demo plan",
+      "user": "demo-workbuddy",
+      "windows": [
+        {"name": "Credits", "used": 100, "resetsAt": "2026-12-15T00:00:00Z", "display": "240 / 240", "amount": 240, "limit": 240, "unit": "credits"},
+        {"name": "Extra credits", "used": 16.125, "display": "64.5 / 400", "amount": 64.5, "limit": 400, "unit": "credits"},
+        {"name": "Total credits", "used": 47.578125, "resetsAt": "2026-12-15T00:00:00Z", "display": "304.5 / 640", "amount": 304.5, "limit": 640, "unit": "credits"},
+        {"name": "Demo model tokens", "used": 10, "resetsAt": "2026-12-15T06:00:00Z", "display": "1,000 / 10,000", "amount": 1000, "limit": 10000}
+      ],
+      "kind": "subscription"
+    },
+    {
+      "provider": "deepseek",
+      "name": "DeepSeek",
+      "user": "demo-wallet",
+      "windows": [],
+      "balance": "¥12.50",
+      "kind": "balance"
+    }
+  ],
+  "object": "list"
+}

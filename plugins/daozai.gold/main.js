@@ -1,6 +1,7 @@
 const HOUR = 3600;
 const DAY = 24 * HOUR;
 const MAX_AGE = 15 * 60;
+const GRAMS_PER_TROY_OUNCE = 31.1034768;
 const UNITS = {
     usd: { currency: "USD", unit: "troy_oz", symbol: "$", short: "$ / 盎司", suffix: "盎司" },
     cny: { currency: "CNY", unit: "gram", symbol: "¥", short: "¥ / 克", suffix: "克" }
@@ -28,6 +29,36 @@ function readQuote(source, unit, now) {
     return { at: timestamp, updatedAt: generated, price, fxStale: unit === "cny" && quote.fx_stale === true };
 }
 
+function tencentFields(rows, code, separator) {
+    const prefix = `v_${code}="`;
+    const row = rows.find(line => line.startsWith(prefix) && line.endsWith('"'));
+    return row?.slice(prefix.length, -1).split(separator) ?? [];
+}
+
+function readTencent(source, now) {
+    if (source?.status !== "ready" || typeof source.text !== "string") return {};
+    const rows = source.text.split(";").map(line => line.trim());
+    const gold = tencentFields(rows, "hf_XAU", ",");
+    const price = Number(gold[0]);
+    const at = Date.parse(`${gold[12]}T${gold[6]}+08:00`) / 1000;
+    if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(at) || at > now + 60 || now - at >= MAX_AGE) {
+        return {};
+    }
+    const usd = { at, updatedAt: at, price, source: "tencent" };
+    const fx = tencentFields(rows, "whUSDCNY", "~");
+    const rate = Number(fx[3]);
+    const stamp = fx[5] ?? "";
+    const date = `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}`;
+    const time = `${stamp.slice(8, 10)}:${stamp.slice(10, 12)}:${stamp.slice(12, 14)}`;
+    const fxTime = Date.parse(`${date}T${time}+08:00`) / 1000;
+    const cnyPrice = price * rate / GRAMS_PER_TROY_OUNCE;
+    if (fx[2] !== "USDCNY" || stamp.length !== 14 || !Number.isFinite(cnyPrice) || cnyPrice <= 0
+        || !Number.isFinite(fxTime) || fxTime > now + 60 || now - fxTime >= DAY) {
+        return { usd };
+    }
+    return { usd, cny: { ...usd, price: cnyPrice, fxStale: now - fxTime >= MAX_AGE } };
+}
+
 function append(points, point, bucket) {
     const last = points[points.length - 1];
     const sameBucket = last && Math.floor(last.at / bucket) === Math.floor(point.at / bucket);
@@ -52,7 +83,8 @@ function updateUnit(previous, quote, threshold, offset, unit) {
         ? { price: threshold, side: side || (prior?.price === threshold ? prior.side : 0), sent: prior?.price === threshold ? prior.sent : 0 }
         : null;
     let notice;
-    if (thresholdState && prior?.price === threshold && newPoint && !fxStale && prior.side * side < 0) {
+    if (thresholdState && prior?.price === threshold && newPoint && !fxStale
+        && previous.source === quote.source && prior.side * side < 0) {
         const flag = side > 0 ? 1 : 2;
         if (!(prior.sent & flag)) {
             thresholdState.sent |= flag;
@@ -72,7 +104,7 @@ function updateUnit(previous, quote, threshold, offset, unit) {
             day: newPoint ? append(day, point, 1) : day,
             week: newPoint ? append(previous?.week ?? [], point, HOUR) : previous?.week ?? [],
             month: newPoint ? append(previous?.month ?? [], point, DAY) : previous?.month ?? [],
-            session, threshold: alertState
+            session, threshold: alertState, source: quote.source
         }
     };
 }
@@ -103,11 +135,15 @@ function computeState(input) {
     const other = unit === "usd" ? "cny" : "usd";
     const thresholds = {};
     const quotes = {};
+    const tencent = readTencent(sources?.tencent, now);
     for (const key of unitKeys) {
         const numeric = Number(settings[`alert_${key}`]);
         thresholds[key] = Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
-        const quote = readQuote(sources?.[key], key, now);
-        quotes[key] = updateUnit(storage?.[key], quote, thresholds[key], offset, key);
+        const previous = storage?.[key];
+        const primary = readQuote(sources?.[key], key, now);
+        const last = previous?.day?.at(-1)?.at ?? 0;
+        const quote = primary && primary.at >= last ? primary : tencent[key];
+        quotes[key] = updateUnit(previous, quote, thresholds[key], offset, key);
     }
 
     const quote = quotes[unit].quote;
@@ -288,9 +324,10 @@ function toCanvas(state) {
             text(value, 138, baseline, 10.5, { align: "right", fill: "$text", max_width: 108 })
         );
     });
-    nodes.push(chart(state), text("更新 " + timeLabel(quote.updatedAt, state.offset), 387, 191, 9.5, {
-        align: "right", fill: "$dim"
-    }));
+    nodes.push(chart(state), text(quote.source === "tencent" ? "腾讯行情" : "XAUS", 0, 191, 9.5, { fill: "$dim" }),
+        text("更新 " + timeLabel(quote.updatedAt, state.offset), 387, 191, 9.5, {
+            align: "right", fill: "$dim"
+        }));
     return { height: 196, nodes };
 }
 

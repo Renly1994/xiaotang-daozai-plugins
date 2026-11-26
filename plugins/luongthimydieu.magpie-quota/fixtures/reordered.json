@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "provider": "workbuddy",
+      "name": "WorkBuddy",
+      "user": "demo-workbuddy",
+      "windows": [
+        {"name": "Credits", "used": 10, "resetsAt": "2026-12-15T00:00:00Z", "display": "24 / 240", "amount": 24, "limit": 240, "unit": "credits"}
+      ],
+      "kind": "subscription"
+    },
+    {
+      "provider": "copilot",
+      "name": "Copilot",
+      "plan": "Demo plan",
+      "user": "demo-copilot",
+      "windows": [
+        {"name": "Premium requests", "used": 7.25, "resetsAt": "2026-12-15T00:00:00Z", "display": "29 / 400"}
+      ],
+      "kind": "subscription"
+    }
+  ],
+  "object": "list"
+}

@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "provider": "deepseek",
+      "name": "DeepSeek",
+      "user": "demo-wallet",
+      "windows": [],
+      "balance": "¥12.50",
+      "kind": "balance"
+    },
+    {
+      "provider": "kimi",
+      "name": "Kimi Code",
+      "windows": [
+        {"name": "5 hours", "used": 42.5, "resetsAt": "2026-12-15T05:00:00Z"},
+        {"name": "Month", "used": 36.25, "resetsAt": "2027-01-01T00:00:00Z"}
+      ],
+      "kind": "plan"
+    }
+  ],
+  "object": "list"
+}

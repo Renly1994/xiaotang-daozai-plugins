@@ -1,0 +1,14 @@
+{
+  "data": [
+    {
+      "provider": "example",
+      "name": "Long",
+      "user": "long",
+      "windows": [
+        {"name": "这是一个非常非常长的额度窗口名称用于检查截断是否生效以及控制字符是否被清理\n第二行", "used": 10}
+      ],
+      "kind": "subscription"
+    }
+  ],
+  "object": "list"
+}

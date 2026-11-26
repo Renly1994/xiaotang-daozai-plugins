@@ -1,0 +1,30 @@
+{
+  "id": "luongthimydieu.magpie-quota",
+  "name": "magpie 额度",
+  "author": "luongthimydieu",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "quota",
+  "capabilities": [
+    "quota.source",
+    "settings",
+    "storage",
+    "timer"
+  ],
+  "refreshSeconds": 60,
+  "dataVersion": 1,
+  "permissions": {
+    "source.read": "loopback"
+  },
+  "settings": [
+    {
+      "key": "account",
+      "label": "账号（「自动选择」或厂商、显示名、登录名）",
+      "type": "text",
+      "default": "自动选择"
+    }
+  ]
+}
