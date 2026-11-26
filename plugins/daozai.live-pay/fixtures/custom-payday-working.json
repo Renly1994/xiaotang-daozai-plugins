@@ -1,0 +1,9 @@
+{
+  "now": 1795673100000,
+  "settings": {
+    "salary": "15000",
+    "payroll_cycle": "custom",
+    "payday": "5",
+    "pinned_show": "payday"
+  }
+}
