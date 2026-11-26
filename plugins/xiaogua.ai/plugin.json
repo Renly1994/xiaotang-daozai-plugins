@@ -2,7 +2,7 @@
   "id": "xiaogua.ai",
   "name": "小米mimo额度",
   "author": "W.g",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "api": 1,
   "runtime": "js",
   "refreshSeconds": 600,
@@ -24,21 +24,16 @@
   },
   "network": {
     "hosts": [
-      "token-plan-cn.xiaomimimo.com",
       "api.xiaomimimo.com"
     ],
     "sources": [
-      {
-        "key": "token_plan",
-        "url": "https://token-plan-cn.xiaomimimo.com/v1/platform/token_plan"
-      },
       {
         "key": "balance",
         "url": "https://api.xiaomimimo.com/v1/platform/balance"
       }
     ],
     "credential": {
-      "label": "小米 MiMo API Key（sk- 或 tp-）",
+      "label": "小米 MiMo API Key（sk- 余额 Key）",
       "header": "Authorization",
       "prefix": "Bearer "
     },
@@ -50,22 +45,20 @@
   },
   "settings": [
     {
-      "key": "quota_label",
-      "label": "套餐额度标签",
-      "type": "text",
-      "default": "本期剩余"
-    },
-    {
-      "key": "balance_label",
-      "label": "余额标签",
-      "type": "text",
-      "default": "可用余额"
-    },
-    {
-      "key": "reset_date",
-      "label": "重置日期（接口未返回周期时使用）",
-      "type": "date",
-      "default": "2026-12-31"
+      "key": "balance_mode",
+      "label": "余额口径",
+      "type": "choice",
+      "default": "available",
+      "choices": [
+        {
+          "value": "available",
+          "label": "总余额（含冻结）"
+        },
+        {
+          "value": "spendable",
+          "label": "可消费余额（扣除冻结）"
+        }
+      ]
     }
   ]
 }
