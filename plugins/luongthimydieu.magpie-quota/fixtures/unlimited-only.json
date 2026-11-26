@@ -3,8 +3,8 @@
     {
       "provider": "copilot",
       "name": "Copilot",
-      "plan": "Education",
-      "user": "luongthimydieu",
+      "plan": "Demo plan",
+      "user": "demo-copilot",
       "windows": [
         {"unlimited": true, "name": "Chat requests", "used": 0, "display": "Unlimited"},
         {"unlimited": true, "name": "Completions", "used": 0, "display": "Unlimited"}

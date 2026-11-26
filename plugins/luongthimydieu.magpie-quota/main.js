@@ -27,10 +27,7 @@ function readWindows(settings, source, storage) {
     }
 
     const wanted = normalize(settings.account);
-    const card = isAuto(wanted)
-        ? autoCard(cards, storage)
-        : firstCard(cards, candidate => matches(candidate, wanted)
-            && cardUsable(candidate) && cardWindows(candidate).length > 0);
+    const card = isAuto(wanted) ? autoCard(cards, storage) : manualCard(cards, wanted);
     if (!card || !cardUsable(card)) {
         return null;
     }
@@ -38,50 +35,69 @@ function readWindows(settings, source, storage) {
     return windows.length ? windows.slice(0, MAX_WINDOWS) : null;
 }
 
-// 自动模式：优先沿用上次固定的账号；该账号仍在但本次不可读时按未知处理，
-// 不悄悄换成另一个账号。账号消失后才重新选并更新固定项。
+// 只有能确认固定账号已经消失时才改选。身份重复或数据缺少身份字段时按未知处理。
 function autoCard(cards, storage) {
-    const pinned = typeof storage.account === "string" ? storage.account : "";
+    const pinned = pinnedIdentity(storage.account);
     if (pinned) {
-        const found = firstCard(cards, candidate => cardKey(candidate) === pinned);
-        if (found) {
-            return found;
+        const candidates = cards.filter(card => couldBeAccount(card, pinned));
+        if (candidates.length > 0) {
+            const candidate = candidates[0];
+            const identity = cardIdentity(candidate);
+            if (candidates.length !== 1 || identity[1] !== pinned[1] || (pinned[2] && identity[2] !== pinned[2])) {
+                return null;
+            }
+            storage.account = JSON.stringify(identity);
+            return candidate;
         }
     }
-    const card = firstCard(cards, candidate => cardUsable(candidate) && cardWindows(candidate).length > 0);
+
+    const card = cards.find(candidate => {
+        const identity = cardIdentity(candidate);
+        return identity[0] && cardUsable(candidate) && cardWindows(candidate).length > 0
+            && !cards.some(other => other !== candidate && couldBeAccount(other, identity));
+    });
     if (card) {
-        storage.account = cardKey(card);
+        storage.account = JSON.stringify(cardIdentity(card));
     }
     return card;
 }
 
-function firstCard(cards, test) {
-    for (let i = 0; i < cards.length; i++) {
-        if (cards[i] && typeof cards[i] === "object" && test(cards[i])) {
-            return cards[i];
-        }
-    }
-    return null;
+function manualCard(cards, wanted) {
+    const matches = cards.filter(card =>
+        [card.provider, card.name, card.alias, card.user].some(field => normalize(field) === wanted));
+    return matches.length === 1 ? matches[0] : null;
 }
 
-function matches(card, wanted) {
-    const fields = [card.provider, card.name, card.user];
-    for (let i = 0; i < fields.length; i++) {
-        if (normalize(fields[i]) === wanted) {
-            return true;
-        }
-    }
-    return false;
+function cardIdentity(card) {
+    // Magpie 将远端来源 ID 加在 provider 前，保留完整路径以区分来源。
+    return [normalize(card.provider), normalize(card.user), normalize(card.kind)];
 }
 
-function cardKey(card) {
-    return JSON.stringify([
-        normalize(card.from),
-        normalize(card.provider),
-        normalize(card.user),
-        normalize(card.plan),
-        normalize(card.name),
-    ]);
+function couldBeAccount(card, [provider, user, kind]) {
+    const [candidateProvider, candidateUser, candidateKind] = cardIdentity(card);
+    return candidateProvider === provider
+        && (!user || !candidateUser || candidateUser === user)
+        && (!kind || !candidateKind || candidateKind === kind);
+}
+
+function pinnedIdentity(value) {
+    if (typeof value !== "string") {
+        return null;
+    }
+    let key;
+    try {
+        key = JSON.parse(value);
+    } catch (error) {
+        return null;
+    }
+    if (!Array.isArray(key) || !key.every(part => typeof part === "string")) {
+        return null;
+    }
+    if (key.length === 5 && key[1]) {
+        // 兼容试装版保存的旧身份，后续使用接口提供的账号类型。
+        return [key[1], key[2], ""];
+    }
+    return key.length === 3 && key[0] ? key : null;
 }
 
 function cardUsable(card) {
@@ -118,12 +134,9 @@ function mapWindow(window, index) {
     if (typeof used !== "number" || !Number.isFinite(used) || used < 0) {
         return null;
     }
-    let remaining = 100 - used;
-    remaining = Math.max(0, Math.min(100, remaining));
-    remaining = Math.round(remaining * 100) / 100;
     const mapped = {
         label: cleanLabel(window.name, "额度 " + (index + 1)),
-        remaining_pct: remaining === 0 ? 0 : remaining,
+        remaining_pct: Math.max(0, 100 - used),
     };
     const reset = timestamp(window.resetsAt);
     if (reset !== null) {
@@ -142,7 +155,7 @@ function parseCards(text) {
     if (!payload || typeof payload !== "object" || !Array.isArray(payload.data)) {
         return null;
     }
-    return payload.data;
+    return payload.data.filter(card => card && typeof card === "object" && !Array.isArray(card));
 }
 
 function timestamp(value) {

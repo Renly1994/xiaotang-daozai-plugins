@@ -127,9 +127,9 @@ test("正常响应只换算可用的百分比窗口", () => {
     const result = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
     assert.equal(result.quota.windows.length, 1);
     assert.equal(result.quota.windows[0].label, "Premium requests");
-    assert.equal(result.quota.windows[0].remaining_pct, 96.75);
-    assert.equal(result.quota.windows[0].reset_at, Math.floor(Date.parse("2026-12-01T00:00:00Z") / 1000));
-    assert.equal(result.storage.account, JSON.stringify(["", "copilot", "luongthimydieu", "education", "copilot"]));
+    assert.equal(result.quota.windows[0].remaining_pct, 92.75);
+    assert.equal(result.quota.windows[0].reset_at, Math.floor(Date.parse("2026-12-15T00:00:00Z") / 1000));
+    assert.equal(result.storage.account, JSON.stringify(["copilot", "demo-copilot", "subscription"]));
 });
 
 test("自动选择会固定账号，不随返回顺序漂移", () => {
@@ -150,9 +150,9 @@ test("固定账号消失后重新选择，并保留原存储的其他字段", ()
     first.storage.note = "保留";
     const result = call({ settings: { account: "自动选择" }, source: ready(fixture("no-copilot.json")), storage: first.storage });
     assert.deepEqual(result.quota.windows.map(window => window.label), ["5 hours", "Month"]);
-    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [57.03, 63.66]);
+    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [57.5, 63.75]);
     assert.equal(result.storage.note, "保留");
-    assert.equal(result.storage.account, JSON.stringify(["", "kimi", "", "", "kimi code"]));
+    assert.equal(result.storage.account, JSON.stringify(["kimi", "", "plan"]));
 });
 
 test("unlimited、text、钱包窗口不换算，超额按 0 剩余", () => {
@@ -194,7 +194,7 @@ test("storage 为异常类型时重置为对象并正常返回", () => {
     for (const storage of [[], "旧数据", 42, null]) {
         const result = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage });
         assert.equal(result.quota.windows.length, 1);
-        assert.equal(result.quota.windows[0].remaining_pct, 96.75);
+        assert.equal(result.quota.windows[0].remaining_pct, 92.75);
         assert.equal(typeof result.storage, "object");
         assert.ok(!Array.isArray(result.storage));
         assert.equal(typeof result.storage.account, "string");
@@ -204,7 +204,7 @@ test("storage 为异常类型时重置为对象并正常返回", () => {
 test("设置可以指定一个账号", () => {
     const result = call({ settings: { account: "workbuddy" }, source: ready(fixture("normal.json")), storage: { note: "原有" } });
     assert.deepEqual(result.quota.windows.map(window => window.label), ["Credits", "Extra credits", "Total credits"]);
-    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [0, 83.98, 65.72]);
+    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [0, 83.875, 52.421875]);
     assert.equal(result.storage.note, "原有");
     assert.equal(result.storage.account, undefined);
 
@@ -215,6 +215,73 @@ test("设置可以指定一个账号", () => {
     assert.equal(missing.quota, null);
 });
 
+function exampleCard(user, used, overrides = {}) {
+    return {
+        provider: "example",
+        name: "Example",
+        kind: "subscription",
+        user,
+        windows: [{ name: "本月", used }],
+        ...overrides,
+    };
+}
+
+function exampleRefresh(cards, account = "自动选择", storage = null) {
+    return call({ settings: { account }, source: ready(JSON.stringify({ data: cards })), storage });
+}
+
+test("套餐和显示名变化后仍固定同一账号", () => {
+    const before = exampleRefresh([exampleCard("first", 10, { plan: "Basic" }), exampleCard("second", 20)]);
+    const renamed = exampleCard("first", 30, { name: "Renamed", plan: "Plus" });
+    const after = exampleRefresh([exampleCard("second", 20), renamed], "自动选择", before.storage);
+    assert.equal(after.quota.windows[0].remaining_pct, 70);
+    assert.equal(after.storage.account, before.storage.account);
+
+    const oldStorage = { account: JSON.stringify(["", "example", "first", "basic", "example"]), note: "保留" };
+    assert.equal(exampleRefresh([exampleCard("second", 20), renamed], "自动选择", oldStorage).quota.windows[0].remaining_pct, 70);
+    assert.deepEqual(oldStorage, { account: before.storage.account, note: "保留" });
+});
+
+test("多个账号同属一个厂商时，手动选择不依赖返回顺序", () => {
+    const first = exampleCard("first", 10);
+    const second = exampleCard("second", 20, { alias: "常用账号" });
+    for (const cards of [[first, second], [second, first]]) {
+        assert.equal(exampleRefresh(cards, "Example").quota, null);
+        assert.equal(exampleRefresh(cards, "second").quota.windows[0].remaining_pct, 80);
+        assert.equal(exampleRefresh(cards, "常用账号").quota.windows[0].remaining_pct, 80);
+    }
+    const offline = exampleCard("first", 10, { readError: "暂时离线" });
+    assert.equal(exampleRefresh([offline, second], "Example").quota, null);
+});
+
+test("自动选择区分来源且保留身份不完整或重复的固定账号", () => {
+    const local = exampleCard("first", 10);
+    const remote = exampleCard("first", 20, { provider: "remote-id/example", from: "远端" });
+    const pinned = exampleRefresh([remote, local]);
+    const remoteRenamed = { ...remote, from: "新的远端名称", name: "Example · 新的远端名称" };
+    assert.equal(exampleRefresh([local, remoteRenamed], "自动选择", pinned.storage).quota.windows[0].remaining_pct, 80);
+
+    const duplicate = exampleCard("first", 30, { provider: "remote-id/example", from: "远端" });
+    const partial = exampleCard("", 50, { provider: "remote-id/example", from: "远端", readError: "暂时离线" });
+    for (const candidate of [duplicate, partial]) {
+        const result = exampleRefresh([candidate, remote, local], "自动选择", pinned.storage);
+        assert.equal(result.quota, null);
+        assert.equal(result.storage.account, pinned.storage.account);
+    }
+    assert.equal(exampleRefresh([partial, local], "自动选择", pinned.storage).quota, null);
+    assert.equal(exampleRefresh([local], "自动选择", pinned.storage).quota.windows[0].remaining_pct, 90);
+});
+
+test("极小的正剩余量保持正数，耗尽才返回零", () => {
+    for (const used of [99.999, 99.9999999]) {
+        const quota = exampleRefresh([exampleCard("first", used)]).quota;
+        assert.equal(quota.windows[0].remaining_pct, 100 - used);
+    }
+    for (const used of [100, 140]) {
+        assert.equal(exampleRefresh([exampleCard("first", used)]).quota.windows[0].remaining_pct, 0);
+    }
+});
+
 test("本机回环读取：正常、404、重定向、超限、超时", async t => {
     const server = await serve(routes);
     t.after(() => server.close());
@@ -223,7 +290,7 @@ test("本机回环读取：正常、404、重定向、超限、超时", async t 
     assert.equal(source.status, "ready");
     assert.ok(source.text.length < LIMIT);
     const result = call({ settings: { account: "自动选择" }, source, storage: null });
-    assert.equal(result.quota.windows[0].remaining_pct, 96.75);
+    assert.equal(result.quota.windows[0].remaining_pct, 92.75);
 
     for (const route of ["/missing", "/redirect", "/huge", "/slow"]) {
         const failed = await readLoopback(server.base + route);

@@ -3,19 +3,19 @@
     {
       "provider": "workbuddy",
       "name": "WorkBuddy",
-      "user": "jinnn",
+      "user": "demo-workbuddy",
       "windows": [
-        {"name": "Credits", "used": 6.402, "resetsAt": "2026-11-30T15:59:59Z", "display": "32.01 / 500", "amount": 32.01, "limit": 500, "unit": "credits"}
+        {"name": "Credits", "used": 10, "resetsAt": "2026-12-15T00:00:00Z", "display": "24 / 240", "amount": 24, "limit": 240, "unit": "credits"}
       ],
       "kind": "subscription"
     },
     {
       "provider": "copilot",
       "name": "Copilot",
-      "plan": "Education",
-      "user": "luongthimydieu",
+      "plan": "Demo plan",
+      "user": "demo-copilot",
       "windows": [
-        {"name": "Premium requests", "used": 3.25, "resetsAt": "2026-12-01T00:00:00Z", "display": "6.5 / 200"}
+        {"name": "Premium requests", "used": 7.25, "resetsAt": "2026-12-15T00:00:00Z", "display": "29 / 400"}
       ],
       "kind": "subscription"
     }

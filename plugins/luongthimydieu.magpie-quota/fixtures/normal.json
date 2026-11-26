@@ -3,60 +3,44 @@
     {
       "provider": "copilot",
       "name": "Copilot",
-      "icon": "githubcopilot",
-      "plan": "Education",
-      "accessSku": "free_educational_quota",
-      "user": "luongthimydieu",
+      "plan": "Demo plan",
+      "user": "demo-copilot",
       "windows": [
-        {"name": "Premium requests", "used": 3.25, "resetsAt": "2026-12-01T00:00:00Z", "display": "6.5 / 200", "holdsWhy": "low"},
+        {"name": "Premium requests", "used": 7.25, "resetsAt": "2026-12-15T00:00:00Z", "display": "29 / 400"},
         {"unlimited": true, "name": "Chat requests", "used": 0, "display": "Unlimited"},
         {"unlimited": true, "name": "Completions", "used": 0, "display": "Unlimited"}
       ],
-      "readAt": "2026-11-26T00:21:08.1368311+08:00",
-      "kind": "subscription",
-      "via": ["7bdc97a81d372e32"],
-      "routing": [{"span": 2592000000000000}, {"aside": true}, {"aside": true}]
+      "kind": "subscription"
     },
     {
       "provider": "zcode",
       "name": "ZCode",
-      "icon": "zcode",
-      "user": "ZCode",
+      "user": "demo-zcode",
       "windows": [],
-      "error": "当前用户不存在coding plan",
+      "error": "示例账号没有可用套餐",
       "pluginError": true,
-      "kind": "subscription",
-      "via": ["7bdc97a81d372e32"]
+      "kind": "subscription"
     },
     {
       "provider": "workbuddy",
       "name": "WorkBuddy",
-      "icon": "workbuddy-color",
-      "plan": "Free plan",
-      "user": "jinnn",
+      "plan": "Demo plan",
+      "user": "demo-workbuddy",
       "windows": [
-        {"name": "Credits", "used": 100, "resetsAt": "2026-11-30T15:59:59Z", "display": "500 / 500", "amount": 500, "limit": 500, "unit": "credits"},
-        {"name": "Extra credits", "used": 16.022777752777777, "display": "288.41 / 1800", "amount": 288.40999955, "limit": 1800, "unit": "credits", "runsOutAt": "2026-12-09T16:00:41Z", "runsOut": 11.59000045},
-        {"name": "Total credits", "used": 34.278695632608695, "resetsAt": "2026-11-30T15:59:59Z", "display": "788.41 / 2300", "amount": 788.4099995500001, "limit": 2300, "unit": "credits", "runsOutAt": "2026-12-09T16:00:41Z", "runsOut": 11.59000045, "holdsWhy": "log"},
-        {"name": "deepseek-v4.1-flash tokens (est.)", "used": 2.489125, "resetsAt": "2026-11-26T00:43:41.543Z", "display": "5.0M / ~200M", "amount": 4978250, "limit": 200000000}
+        {"name": "Credits", "used": 100, "resetsAt": "2026-12-15T00:00:00Z", "display": "240 / 240", "amount": 240, "limit": 240, "unit": "credits"},
+        {"name": "Extra credits", "used": 16.125, "display": "64.5 / 400", "amount": 64.5, "limit": 400, "unit": "credits"},
+        {"name": "Total credits", "used": 47.578125, "resetsAt": "2026-12-15T00:00:00Z", "display": "304.5 / 640", "amount": 304.5, "limit": 640, "unit": "credits"},
+        {"name": "Demo model tokens", "used": 10, "resetsAt": "2026-12-15T06:00:00Z", "display": "1,000 / 10,000", "amount": 1000, "limit": 10000}
       ],
-      "readAt": "2026-11-26T00:21:08.5334499+08:00",
-      "daily": {"since": "2026-11-08", "days": [{"day": "2026-11-25", "used": 55.65}], "window": "Credits"},
-      "kind": "subscription",
-      "via": ["7bdc97a81d372e32"],
-      "routing": [{"span": 2591999000000000, "aside": true}, {"aside": true}, {"span": 2591999000000000}, {"span": 86400000000000, "aside": true}]
+      "kind": "subscription"
     },
     {
       "provider": "deepseek",
       "name": "DeepSeek",
-      "icon": "deepseek-color",
-      "user": "sk-1…c2b6",
+      "user": "demo-wallet",
       "windows": [],
-      "balance": "¥66.30",
-      "sharedBalance": "sk-1…c2b6",
-      "readAt": "2026-11-26T00:21:07.0227829+08:00",
-      "kind": "balance",
-      "via": ["7bdc97a81d372e32"]
+      "balance": "¥12.50",
+      "kind": "balance"
     }
   ],
   "object": "list"
