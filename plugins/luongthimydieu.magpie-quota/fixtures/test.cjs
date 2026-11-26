@@ -12,6 +12,7 @@ const DIR = __dirname;
 const CODE = fs.readFileSync(path.join(DIR, "..", "main.js"), "utf8");
 const LIMIT = 128 * 1024;
 const TIMEOUT = 2000;
+const COMPLETE_URL = "http://127.0.0.1:3425/v1/magpie/quotas/cards";
 
 function call(input) {
     const context = vm.createContext({});
@@ -25,6 +26,63 @@ function fixture(name) {
 
 function ready(text) {
     return { status: "ready", text };
+}
+
+function allNodes(canvas) {
+    const nodes = [];
+    const walk = list => {
+        for (const node of list) {
+            nodes.push(node);
+            if (Array.isArray(node.group)) {
+                walk(node.group);
+            }
+        }
+    };
+    walk(canvas.nodes || []);
+    return nodes;
+}
+
+function texts(canvas) {
+    return allNodes(canvas).filter(node => typeof node.text === "string").map(node => node.text);
+}
+
+function nodesWith(canvas, key) {
+    return allNodes(canvas).filter(node => node[key] !== undefined);
+}
+
+function assertCanvasShape(canvas) {
+    assert.ok(canvas && typeof canvas === "object", "canvas 必须存在");
+    assert.ok(canvas.height >= 40 && canvas.height <= 360);
+    const nodes = allNodes(canvas);
+    assert.ok(nodes.length <= 1500);
+    let characters = 0;
+    for (const node of nodes) {
+        if (typeof node.text === "string") {
+            const length = Array.from(node.text).length;
+            characters += length;
+            assert.ok(length >= 1);
+            assert.ok(node.size >= 6 && node.size <= 96);
+        }
+        if (node.group !== undefined) {
+            assert.ok(Array.isArray(node.clip) && node.clip.length === 4);
+            assert.equal(node.scroll.axis, "y");
+            assert.ok(node.scroll.content > 0);
+        }
+        if (node.arc !== undefined) {
+            assert.ok(Number.isFinite(node.arc.r) && node.arc.r > 0);
+            assert.ok(Number.isFinite(node.arc.sweep));
+        }
+    }
+    assert.ok(characters <= 2000, "画布文字合计不能超过 2000 字");
+}
+
+function assertNoticeShape(notice) {
+    assert.ok(notice, "notice 必须存在");
+    assert.ok(typeof notice.id === "string" && notice.id.length >= 1 && notice.id.length <= 128);
+    assert.ok(Array.from(notice.title).length >= 1 && Array.from(notice.title).length <= 40);
+    if (notice.body !== undefined) {
+        assert.ok(Array.from(notice.body).length >= 1 && Array.from(notice.body).length <= 120, notice.body);
+    }
 }
 
 // 与宿主 source_read::read_http 相同：直连回环、不跟随重定向、2 秒、128 KiB。
@@ -116,207 +174,222 @@ const routes = {
     },
 };
 
-test("未授权与离线一律返回未知", () => {
-    const unconfigured = call({ settings: { account: "自动选择" }, source: { status: "unconfigured" }, storage: null });
-    assert.equal(unconfigured.quota, null);
-    const offline = call({ settings: { account: "自动选择" }, source: { status: "offline" }, storage: null });
-    assert.equal(offline.quota, null);
+function render(name, settings = {}) {
+    return call({ settings, source: ready(fixture(name)), storage: null });
+}
+
+function assertNoQuota(result) {
+    assert.equal(result.quota, null);
+    assert.equal(result.storage, undefined);
+}
+
+test("未授权时提醒并提供可复制的地址，离线时不发提醒", () => {
+    const unconfigured = call({ settings: {}, source: { status: "unconfigured" }, storage: null });
+    assertNoQuota(unconfigured);
+    assert.equal(unconfigured.status.state, "idle");
+    assert.ok(texts(unconfigured.canvas).includes("用默认地址授权？"));
+    assert.ok(texts(unconfigured.canvas).includes(COMPLETE_URL));
+    assertNoticeShape(unconfigured.notice);
+    assert.equal(unconfigured.notice.id, "url-unauthorized");
+    assert.ok(unconfigured.notice.body.includes(COMPLETE_URL));
+    const copyable = allNodes(unconfigured.canvas).find(node => node.hit && node.hit.copy === COMPLETE_URL);
+    assert.ok(copyable, "地址应支持点击复制");
+    assert.equal(copyable.text, COMPLETE_URL);
+    assertCanvasShape(unconfigured.canvas);
+
+    const offline = call({ settings: {}, source: { status: "offline" }, storage: null });
+    assertNoQuota(offline);
+    assert.equal(offline.status.state, "offline");
+    assert.ok(texts(offline.canvas).includes("magpie 未运行或地址不通"));
+    assert.equal(offline.notice, undefined);
+    assertCanvasShape(offline.canvas);
 });
 
-test("正常响应只换算可用的百分比窗口", () => {
-    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
-    assert.equal(result.quota.windows.length, 1);
-    assert.equal(result.quota.windows[0].label, "Premium requests");
-    assert.equal(result.quota.windows[0].remaining_pct, 92.75);
-    assert.equal(result.quota.windows[0].reset_at, Math.floor(Date.parse("2026-12-15T00:00:00Z") / 1000));
-    assert.equal(result.storage.account, JSON.stringify(["copilot", "demo-copilot", "subscription"]));
+test("正常响应按平台汇总，舍弃没有订阅也没有余额的账号", () => {
+    const result = render("normal.json");
+    assertNoQuota(result);
+    assert.equal(result.status.state, "succeeded");
+    assertCanvasShape(result.canvas);
+    const labels = texts(result.canvas);
+    assert.ok(labels.includes("Copilot"));
+    assert.ok(labels.includes("WorkBuddy"));
+    assert.ok(labels.includes("DeepSeek"));
+    assert.ok(!labels.some(text => text.includes("ZCode")), "ZCode 没有订阅也没有余额，应舍弃");
+    assert.ok(labels.includes("剩 92.8%"));
+    assert.ok(labels.includes("336 积分"));
+    assert.ok(labels.includes("¥12.50"));
+    assert.ok(labels.includes("暂无用量数据"));
 });
 
-test("旧端点响应的 remaining 直接作为剩余百分比", () => {
-    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("legacy-quotas.json")), storage: null });
-    assert.deepEqual(result.quota.windows.map(window => window.label), ["Premium requests"]);
-    assert.equal(result.quota.windows[0].remaining_pct, 96.75);
-    assert.equal(result.quota.windows[0].reset_at, Math.floor(Date.parse("2026-12-01T00:00:00Z") / 1000));
-    assert.equal(result.storage.account, JSON.stringify(["copilot", "demo-copilot", "subscription"]));
+test("同一平台的多账号合并为一行并累加积分", () => {
+    const result = render("multi-account.json");
+    assertCanvasShape(result.canvas);
+    const labels = texts(result.canvas);
+    assert.ok(labels.includes("WorkBuddy ×3"));
+    assert.equal(labels.filter(text => text === "WorkBuddy ×3").length, 1);
+    assert.ok(labels.includes("7232 积分"));
+    assert.ok(labels.includes("剩 96.8%"));
+    assert.ok(labels.includes("剩 36.3%"));
+    assert.ok(!labels.some(text => text.includes("ZCode")));
 
-    // 旧端点条目可能缺少 plan、kind，并带上 holdsWhy、runsOut 等未知字段。
-    const workbuddy = call({ settings: { account: "workbuddy" }, source: ready(fixture("legacy-quotas.json")), storage: null });
-    assert.deepEqual(workbuddy.quota.windows.map(window => window.label), ["Credits", "Extra credits", "Total credits"]);
-    assert.deepEqual(workbuddy.quota.windows.map(window => window.remaining_pct), [0, 78.76, 62.36]);
+    // 圆环按剩余比例从低到高：Kimi、WorkBuddy、Copilot。
+    assert.ok(labels.includes("36%"));
+    assert.ok(labels.includes("86%"));
+    assert.ok(labels.includes("97%"));
+
+    // 折线取最近 7 天，三个 WorkBuddy 账号的当日用量相加。
+    const points = nodesWith(result.canvas, "points");
+    assert.equal(points.length, 2, "面积和折线各一个节点");
+    assert.equal(points[0].points.length, 7);
 });
 
-test("remaining 与 used 冲突或形态异常时的取舍", () => {
-    const windows = [
-        { name: "冲突", used: 40, remaining: 55 },
-        { name: "剩余越界", used: 40, remaining: 140 },
-        { name: "剩余为字符串", used: 40, remaining: "55" },
-    ];
-    const source = ready(JSON.stringify({ data: [{ provider: "p", user: "u", windows }] }));
-    const result = call({ settings: { account: "自动选择" }, source, storage: null });
-    assert.deepEqual(result.quota.windows.map(window => window.label), ["冲突", "剩余越界", "剩余为字符串"]);
-    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [55, 60, 60]);
+test("共享余额只显示一次", () => {
+    const result = render("shared-balance.json");
+    const labels = texts(result.canvas);
+    assert.ok(labels.includes("DeepSeek ×2"));
+    assert.ok(labels.includes("¥66.30"));
+    assert.ok(!labels.some(text => text.includes("132.60")));
+    assertCanvasShape(result.canvas);
+});
 
-    const onlyRemaining = call({
-        settings: { account: "自动选择" },
-        source: ready(JSON.stringify({ data: [{ provider: "p", user: "u", windows: [{ name: "只有剩余", remaining: 30 }, { name: "无读数", remaining: null }] }] })),
+test("平台数量增加时自动换列并让出图表", () => {
+    const make = count => {
+        const data = [];
+        for (let i = 0; i < count; i++) {
+            data.push({
+                provider: "p" + i,
+                name: "P" + i,
+                user: "u" + i,
+                windows: [{ name: "Credits", used: 10, limit: 100, unit: "credits" }],
+            });
+        }
+        return call({ settings: {}, source: ready(JSON.stringify({ data })), storage: null });
+    };
+
+    // 7 至 14 个：两列，保留折线和圆环。
+    const twelve = make(12);
+    const twelveLabels = texts(twelve.canvas);
+    for (let i = 0; i < 12; i++) {
+        assert.ok(twelveLabels.includes("P" + i), "P" + i);
+    }
+    assert.ok(twelveLabels.includes("近 7 天用量"));
+    assert.ok(nodesWith(twelve.canvas, "arc").length > 0);
+
+    // 15 至 21 个：三列，仍保留图表。
+    const twentyFour = make(24);
+    const twentyFourLabels = texts(twentyFour.canvas);
+    for (let i = 0; i < 24; i++) {
+        assert.ok(twentyFourLabels.includes("P" + i), "P" + i);
+    }
+    assert.ok(twentyFourLabels.includes("近 7 天用量"));
+    assert.equal(nodesWith(twentyFour.canvas, "arc").length, 0, "平台多时圆环让位给列表");
+
+    // 31 个以上：图表全部让位，只保留列表。
+    const forty = make(40);
+    const fortyLabels = texts(forty.canvas);
+    for (let i = 0; i < 40; i++) {
+        assert.ok(fortyLabels.includes("P" + i), "P" + i);
+    }
+    assert.ok(!fortyLabels.includes("近 7 天用量"));
+    assert.equal(nodesWith(forty.canvas, "arc").length, 0);
+
+    // 超过一页容量时在底部说明未显示数量。
+    const overflow = make(50);
+    assert.ok(texts(overflow.canvas).some(text => text.startsWith("另有 ")));
+
+    for (const canvas of [twelve.canvas, twentyFour.canvas, forty.canvas, overflow.canvas]) {
+        assertCanvasShape(canvas);
+    }
+});
+
+test("旧端点直接采用 remaining，不估算积分", () => {
+    const result = render("legacy-quotas.json");
+    const labels = texts(result.canvas);
+    assert.ok(labels.includes("剩 96.8%"));
+    assert.ok(labels.includes("1497 积分"));
+    assert.ok(labels.includes("¥12.50"));
+    assertCanvasShape(result.canvas);
+});
+
+test("只有无限额窗口时显示“无限”", () => {
+    const result = render("unlimited-only.json");
+    const labels = texts(result.canvas);
+    assert.ok(labels.includes("无限"));
+    assertCanvasShape(result.canvas);
+});
+
+test("条目报错但有余额时保留余额", () => {
+    const result = call({
+        settings: {},
+        source: ready(JSON.stringify({
+            data: [{ provider: "x", name: "X", user: "u", windows: [], balance: "¥5.00", error: "读取失败", kind: "balance" }],
+        })),
         storage: null,
     });
-    assert.deepEqual(onlyRemaining.quota.windows.map(window => window.label), ["只有剩余"]);
-    assert.equal(onlyRemaining.quota.windows[0].remaining_pct, 30);
+    assert.ok(texts(result.canvas).includes("¥5.00"));
+    assertCanvasShape(result.canvas);
 });
 
-test("授权地址只填到 /v1 时拿到接口索引，按未知处理", () => {
-    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("api-index.json")), storage: null });
-    assert.equal(result.quota, null);
-});
-
-test("自动选择会固定账号，不随返回顺序漂移", () => {
-    const first = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
-    const second = call({ settings: { account: "自动选择" }, source: ready(fixture("reordered.json")), storage: first.storage });
-    assert.equal(second.quota.windows[0].label, "Premium requests");
-    assert.equal(second.storage.account, first.storage.account);
-});
-
-test("固定账号报错时按未知处理，不换成别的账号", () => {
-    const first = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
-    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("pinned-error.json")), storage: first.storage });
-    assert.equal(result.quota, null);
-});
-
-test("固定账号消失后重新选择，并保留原存储的其他字段", () => {
-    const first = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage: null });
-    first.storage.note = "保留";
-    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("no-copilot.json")), storage: first.storage });
-    assert.deepEqual(result.quota.windows.map(window => window.label), ["5 hours", "Month"]);
-    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [57.5, 63.75]);
-    assert.equal(result.storage.note, "保留");
-    assert.equal(result.storage.account, JSON.stringify(["kimi", "", "plan"]));
-});
-
-test("unlimited、text、钱包窗口不换算，超额按 0 剩余", () => {
-    const unlimited = call({ settings: { account: "自动选择" }, source: ready(fixture("unlimited-only.json")), storage: null });
-    assert.equal(unlimited.quota, null);
-
-    const mixed = call({ settings: { account: "自动选择" }, source: ready(fixture("text-and-unlimited.json")), storage: null });
-    assert.equal(mixed.quota.windows.length, 1);
-    assert.equal(mixed.quota.windows[0].label, "已用超额");
-    assert.equal(mixed.quota.windows[0].remaining_pct, 0);
-});
-
-test("窗口名称按宿主规则截断并去掉控制字符", () => {
-    const result = call({ settings: { account: "自动选择" }, source: ready(fixture("long-label.json")), storage: null });
-    const label = result.quota.windows[0].label;
-    assert.equal(Array.from(label).length, 40);
-    assert.ok(!/[\u0000-\u001f\u007f-\u009f]/.test(label));
-});
-
-test("空数据与坏响应按未知处理", () => {
-    assert.equal(call({ settings: {}, source: ready(fixture("empty.json")), storage: null }).quota, null);
-    assert.equal(call({ settings: {}, source: ready(fixture("malformed.txt")), storage: null }).quota, null);
-    assert.equal(call({ settings: {}, source: ready("{}"), storage: null }).quota, null);
-    assert.equal(call({ settings: {}, source: ready('{"data":{}}'), storage: null }).quota, null);
-});
-
-test("条目错误字段为意外类型时按未知处理", () => {
-    const cards = [
-        { provider: "a", name: "A", user: "a", windows: [{ name: "W", used: 10 }], error: { code: 1 }, kind: "subscription" },
-        { provider: "b", name: "B", user: "b", windows: [{ name: "W", used: 20 }], pluginError: [], kind: "subscription" },
-        { provider: "c", name: "C", user: "c", windows: [{ name: "W", used: 30 }], readError: 7, kind: "subscription" },
-        { provider: "d", name: "D", user: "d", windows: [{ name: "W", used: 40 }], error: "", pluginError: false, readError: 0, kind: "subscription" },
-    ];
-    const result = call({ settings: { account: "自动选择" }, source: ready(JSON.stringify({ data: cards })), storage: null });
-    assert.equal(result.quota.windows[0].remaining_pct, 60);
-});
-
-test("storage 为异常类型时重置为对象并正常返回", () => {
-    for (const storage of [[], "旧数据", 42, null]) {
-        const result = call({ settings: { account: "自动选择" }, source: ready(fixture("normal.json")), storage });
-        assert.equal(result.quota.windows.length, 1);
-        assert.equal(result.quota.windows[0].remaining_pct, 92.75);
-        assert.equal(typeof result.storage, "object");
-        assert.ok(!Array.isArray(result.storage));
-        assert.equal(typeof result.storage.account, "string");
+test("平台超过 8 个时仍在一页显示，不使用滚动", () => {
+    const data = [];
+    for (let i = 0; i < 12; i++) {
+        data.push({
+            provider: "p" + i,
+            name: "P" + i,
+            user: "u" + i,
+            windows: [{ name: "Credits", used: 10, limit: 100, unit: "credits" }],
+        });
     }
-});
-
-test("设置可以指定一个账号", () => {
-    const result = call({ settings: { account: "workbuddy" }, source: ready(fixture("normal.json")), storage: { note: "原有" } });
-    assert.deepEqual(result.quota.windows.map(window => window.label), ["Credits", "Extra credits", "Total credits"]);
-    assert.deepEqual(result.quota.windows.map(window => window.remaining_pct), [0, 83.875, 52.421875]);
-    assert.equal(result.storage.note, "原有");
-    assert.equal(result.storage.account, undefined);
-
-    const mixedCase = call({ settings: { account: "Copilot" }, source: ready(fixture("normal.json")), storage: null });
-    assert.equal(mixedCase.quota.windows.length, 1);
-
-    const missing = call({ settings: { account: "没有这个账号" }, source: ready(fixture("normal.json")), storage: null });
-    assert.equal(missing.quota, null);
-});
-
-function exampleCard(user, used, overrides = {}) {
-    return {
-        provider: "example",
-        name: "Example",
-        kind: "subscription",
-        user,
-        windows: [{ name: "本月", used }],
-        ...overrides,
-    };
-}
-
-function exampleRefresh(cards, account = "自动选择", storage = null) {
-    return call({ settings: { account }, source: ready(JSON.stringify({ data: cards })), storage });
-}
-
-test("套餐和显示名变化后仍固定同一账号", () => {
-    const before = exampleRefresh([exampleCard("first", 10, { plan: "Basic" }), exampleCard("second", 20)]);
-    const renamed = exampleCard("first", 30, { name: "Renamed", plan: "Plus" });
-    const after = exampleRefresh([exampleCard("second", 20), renamed], "自动选择", before.storage);
-    assert.equal(after.quota.windows[0].remaining_pct, 70);
-    assert.equal(after.storage.account, before.storage.account);
-
-    const oldStorage = { account: JSON.stringify(["", "example", "first", "basic", "example"]), note: "保留" };
-    assert.equal(exampleRefresh([exampleCard("second", 20), renamed], "自动选择", oldStorage).quota.windows[0].remaining_pct, 70);
-    assert.deepEqual(oldStorage, { account: before.storage.account, note: "保留" });
-});
-
-test("多个账号同属一个厂商时，手动选择不依赖返回顺序", () => {
-    const first = exampleCard("first", 10);
-    const second = exampleCard("second", 20, { alias: "常用账号" });
-    for (const cards of [[first, second], [second, first]]) {
-        assert.equal(exampleRefresh(cards, "Example").quota, null);
-        assert.equal(exampleRefresh(cards, "second").quota.windows[0].remaining_pct, 80);
-        assert.equal(exampleRefresh(cards, "常用账号").quota.windows[0].remaining_pct, 80);
+    const result = call({ settings: {}, source: ready(JSON.stringify({ data })), storage: null });
+    assertCanvasShape(result.canvas);
+    const labels = texts(result.canvas);
+    for (let i = 0; i < 12; i++) {
+        assert.ok(labels.includes("P" + i), "P" + i);
     }
-    const offline = exampleCard("first", 10, { readError: "暂时离线" });
-    assert.equal(exampleRefresh([offline, second], "Example").quota, null);
+    assert.ok(!allNodes(result.canvas).some(node => node.scroll !== undefined));
+    assert.ok(!allNodes(result.canvas).some(node => node.group !== undefined));
 });
 
-test("自动选择区分来源且保留身份不完整或重复的固定账号", () => {
-    const local = exampleCard("first", 10);
-    const remote = exampleCard("first", 20, { provider: "remote-id/example", from: "远端" });
-    const pinned = exampleRefresh([remote, local]);
-    const remoteRenamed = { ...remote, from: "新的远端名称", name: "Example · 新的远端名称" };
-    assert.equal(exampleRefresh([local, remoteRenamed], "自动选择", pinned.storage).quota.windows[0].remaining_pct, 80);
+test("三类错址分别发一次性提醒，并在画布上给出引导", () => {
+    const index = render("api-index.json");
+    assertNoQuota(index);
+    assert.equal(index.status.state, "error");
+    assertNoticeShape(index.notice);
+    assert.equal(index.notice.id, "bad-url-index");
+    assert.ok(texts(index.canvas).includes("授权地址不完整"));
+    assert.ok(allNodes(index.canvas).some(node => node.hit && node.hit.copy === COMPLETE_URL));
+    assertCanvasShape(index.canvas);
 
-    const duplicate = exampleCard("first", 30, { provider: "remote-id/example", from: "远端" });
-    const partial = exampleCard("", 50, { provider: "remote-id/example", from: "远端", readError: "暂时离线" });
-    for (const candidate of [duplicate, partial]) {
-        const result = exampleRefresh([candidate, remote, local], "自动选择", pinned.storage);
-        assert.equal(result.quota, null);
-        assert.equal(result.storage.account, pinned.storage.account);
+    const missing = render("malformed.txt");
+    assert.equal(missing.status.state, "error");
+    assertNoticeShape(missing.notice);
+    assert.equal(missing.notice.id, "bad-url-missing");
+
+    for (const text of ["{}", '{"hello":"world"}', "not json", ""]) {
+        const unknown = call({ settings: {}, source: ready(text), storage: null });
+        assert.equal(unknown.status.state, "error", JSON.stringify(text));
+        assertNoticeShape(unknown.notice);
+        assert.equal(unknown.notice.id, "bad-url-unknown", JSON.stringify(text));
     }
-    assert.equal(exampleRefresh([partial, local], "自动选择", pinned.storage).quota, null);
-    assert.equal(exampleRefresh([local], "自动选择", pinned.storage).quota.windows[0].remaining_pct, 90);
+
+    assert.equal(render("normal.json").notice, undefined);
+    assert.equal(call({ settings: {}, source: { status: "offline" }, storage: null }).notice, undefined);
 });
 
-test("极小的正剩余量保持正数，耗尽才返回零", () => {
-    for (const used of [99.999, 99.9999999]) {
-        const quota = exampleRefresh([exampleCard("first", used)]).quota;
-        assert.equal(quota.windows[0].remaining_pct, 100 - used);
+test("画布文字保持简短且符合坐标与字号限制", () => {
+    const result = render("multi-account.json");
+    assertCanvasShape(result.canvas);
+    const labels = texts(result.canvas);
+    for (const label of labels) {
+        assert.ok(Array.from(label).length <= 40, label);
     }
-    for (const used of [100, 140]) {
-        assert.equal(exampleRefresh([exampleCard("first", used)]).quota.windows[0].remaining_pct, 0);
+    assert.ok(labels.every(label => !/[\r\n]/.test(label)));
+});
+
+test("内容区底部使用圆角背景", () => {
+    for (const canvas of [render("multi-account.json").canvas, render("api-index.json").canvas]) {
+        assert.equal(canvas.nodes[0].fill, "$card");
+        assert.match(canvas.nodes[0].path, /^M0 0 H387 V\d+ Q387 \d+ \d+ \d+ H12 Q0 \d+ 0 \d+ Z$/);
     }
 });
 
@@ -327,8 +400,9 @@ test("本机回环读取：正常、404、重定向、超限、超时", async t 
     const source = await readLoopback(server.base + "/v1/magpie/quotas/cards");
     assert.equal(source.status, "ready");
     assert.ok(source.text.length < LIMIT);
-    const result = call({ settings: { account: "自动选择" }, source, storage: null });
-    assert.equal(result.quota.windows[0].remaining_pct, 92.75);
+    const result = call({ settings: {}, source, storage: null });
+    assert.equal(result.quota, null);
+    assert.ok(texts(result.canvas).includes("Copilot"));
 
     for (const route of ["/missing", "/redirect", "/huge", "/slow"]) {
         const failed = await readLoopback(server.base + route);
@@ -344,19 +418,8 @@ test("连接拒绝按离线处理", async () => {
     await new Promise(resolve => server.close(resolve));
     const source = await readLoopback(`http://127.0.0.1:${port}/v1/magpie/quotas/cards`);
     assert.equal(source.status, "offline");
-    assert.equal(call({ settings: {}, source, storage: null }).quota, null);
+    assert.equal(call({ settings: {}, source, storage: null }).status.state, "offline");
 });
-
-function assertQuotaShape(result) {
-    if (!result.quota) {
-        return;
-    }
-    assert.ok(result.quota.windows.length >= 1 && result.quota.windows.length <= 3);
-    for (const window of result.quota.windows) {
-        assert.ok(window.label.length > 0 && Array.from(window.label).length <= 40);
-        assert.ok(window.remaining_pct >= 0 && window.remaining_pct <= 100);
-    }
-}
 
 test("本机 magpie 实况", { skip: process.env.MAGPIE_LIVE !== "1" }, async () => {
     const started = Date.now();
@@ -369,9 +432,21 @@ test("本机 magpie 实况", { skip: process.env.MAGPIE_LIVE !== "1" }, async ()
     console.log(`实况读取 ${Buffer.byteLength(source.text)} 字节，${elapsed} 毫秒`);
     assert.ok(Buffer.byteLength(source.text) <= LIMIT);
     assert.ok(elapsed < TIMEOUT);
-    assertQuotaShape(call({ settings: { account: "自动选择" }, source, storage: null }));
 
-    // 旧端点：窗口里额外带 remaining，本插件应直接采用。
+    const live = call({ settings: {}, source, storage: null });
+    assertNoQuota(live);
+    assert.equal(live.notice, undefined);
+    assertCanvasShape(live.canvas);
+    const labels = texts(live.canvas);
+    assert.ok(!labels.some(text => text.includes("ZCode")));
+
+    const data = JSON.parse(source.text).data;
+    const workbuddy = data.filter(card => card && card.provider === "workbuddy" && card.windows && card.windows.length);
+    if (workbuddy.length > 1) {
+        assert.ok(labels.includes("WorkBuddy ×" + workbuddy.length), labels.join("|"));
+    }
+
+    // 旧端点：窗口里额外带 remaining，插件应直接采用。
     const legacy = await readLoopback("http://127.0.0.1:3425/v1/magpie/quotas?kept=1");
     if (legacy.status !== "ready") {
         console.log("旧端点不可用，跳过实况读取");
@@ -379,5 +454,7 @@ test("本机 magpie 实况", { skip: process.env.MAGPIE_LIVE !== "1" }, async ()
     }
     console.log(`旧端点读取 ${Buffer.byteLength(legacy.text)} 字节`);
     assert.ok(Buffer.byteLength(legacy.text) <= LIMIT);
-    assertQuotaShape(call({ settings: { account: "自动选择" }, source: legacy, storage: null }));
+    const legacyResult = call({ settings: {}, source: legacy, storage: null });
+    assertNoQuota(legacyResult);
+    assertCanvasShape(legacyResult.canvas);
 });

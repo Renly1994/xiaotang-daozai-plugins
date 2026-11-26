@@ -2,7 +2,7 @@
   "id": "luongthimydieu.magpie-quota",
   "name": "magpie 额度",
   "author": "luongthimydieu",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
@@ -10,8 +10,11 @@
   "owner": "quota",
   "capabilities": [
     "quota.source",
+    "status.page",
+    "status.canvas",
+    "action",
+    "notice",
     "settings",
-    "storage",
     "timer"
   ],
   "refreshSeconds": 60,
@@ -21,10 +24,10 @@
   },
   "settings": [
     {
-      "key": "account",
-      "label": "账号（「自动选择」或厂商、显示名、登录名）",
+      "key": "address",
+      "label": "授权地址（复制到「授权数据源」，改这里不会改变授权）",
       "type": "text",
-      "default": "自动选择"
+      "default": "http://127.0.0.1:3425/v1/magpie/quotas/cards"
     }
   ]
 }
