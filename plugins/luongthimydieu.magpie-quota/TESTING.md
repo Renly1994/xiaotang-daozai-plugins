@@ -24,12 +24,14 @@ Remove-Item Env:MAGPIE_LIVE
 | `unconfigured` | `quota` 为 `null`，画布以「用默认地址授权？」提示完整地址并支持点击复制，发 `url-unauthorized` 提醒 |
 | `offline` | `quota` 为 `null`，画布显示「magpie 未运行或地址不通」，不发提醒 |
 | `normal.json` | `quota` 返回 Copilot 的 `Premium requests`（`remaining_pct` 92.75），`storage.account` 固定为 Copilot；按平台列出 Copilot、WorkBuddy、DeepSeek；ZCode 因无订阅无余额被舍弃；WorkBuddy 显示 `336 积分`，DeepSeek 显示 `¥12.50` |
-| `multi-account.json` | 三个 WorkBuddy 账号合并为 `WorkBuddy ×3` 一行，积分累加为 `7232 积分`；圆环按剩余比例显示 Kimi、WorkBuddy、Copilot；折线 7 个点 |
+| `multi-account.json` | 三个 WorkBuddy 账号合并为 `WorkBuddy ×3` 一行，积分累加为 `7232 积分`；圆环按剩余比例显示 Kimi、WorkBuddy、Copilot；柱状图 7 根柱（11-20 至 11-26） |
 | `shared-balance.json` | 两个共享钱包的 DeepSeek 账号只显示一次 `¥66.30`，不重复累加 |
 | 两个独立同额钱包 | 未声明 `sharedBalance` 时不按金额合并，显示 `¥5.00 等2个` |
 | 同名不同单位窗口 | `credits` 与 `tokens` 的 `Quota` 窗口分别保留，`quota.windows` 有 3 条，不出现合并后的总量 |
-| 跨单位趋势 | 只采用记录最多的 `credits` 系列，日期轴止于 11-21，落点为 11-20、11-21 两个 |
-| 缺日期趋势 | 日期轴固定 7 个自然日，11-22 至 11-25 留空档，折线不跨空档连线 |
+| 跨单位趋势 | 只采用记录最多的 `credits` 系列，日期轴止于 11-21，柱子只落在 11-20、11-21 两个槽位 |
+| 缺日期趋势 | 日期轴固定 15 个自然日（止于 11-26），只有 11-20、11-21、11-26 三根柱，缺日不补柱 |
+| 单槽 / 零值 | 只有单天有值时画一根柱；当天读数为 0 时保留 1px 短柱，与缺日区分 |
+| 槽位边界 | 窗口首尾日期落在第 1、15 个槽位，柱子不越过图表左右边界 |
 | 日期轴锚点 | 给出 `today` 时轴止于当天，`2026-13-45` 与 `2099-01-01` 混入时真实数据仍落在 11-20、11-21、11-26；`today` 缺失或非法时退回最后一条有效数据的锚点 |
 | `legacy-quotas.json`（旧端点形态） | 直接采用 `remaining`；带 `limit` 的 WorkBuddy 显示 `1497 积分`；旧 `readAt` 显示「较早缓存」 |
 | 缓存时间行 | 新鲜 `readAt` 显示「缓存 HH:MM」；缺少或无法解析时不显示 |
@@ -78,7 +80,7 @@ $json = @{ sources = @{ default = @{ status = 'ready'; text = $text } } } | Conv
 
 | 本机状态 | 预期 |
 | --- | --- |
-| magpie 正在运行 | 状态页直接出现折线、圆环、平台列表和右上角缓存时间，没有「magpie 额度 · N 个账号」这类标题 |
+| magpie 正在运行 | 状态页直接出现「近 15 天用量」柱状图、圆环、平台列表和右上角缓存时间，没有「magpie 额度 · N 个账号」这类标题 |
 | 同一平台多个账号 | 只出现一行并标 `×N`，积分是各账号累加值 |
 | 余额账号 | 显示 `¥` 金额；同一 `sharedBalance` 只出现一次，独立钱包显示 `等N个` |
 | 无订阅无余额的账号（ZCode） | 不出现 |

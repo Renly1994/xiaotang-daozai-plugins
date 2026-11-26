@@ -47,6 +47,9 @@ const CHART_TOP = 26;
 const CHART_BOTTOM = 66;
 const CHART_LEFT = 14;
 const CHART_RIGHT = 373;
+// 柱状图固定 15 个日期槽位：每天一个槽，缺日留空，不挪动其它柱子的位置。
+const CHART_DAYS = 15;
+const BAR_WIDTH = 12;
 const CACHE_RIGHT = 373;
 const STALE_CACHE_MS = 30 * 60 * 1000;
 const AUTO = ["", "自动", "自动选择", "auto"];
@@ -476,8 +479,8 @@ function choosePrimary(windows) {
     return total || lowest || windows[0] || null;
 }
 
-// 折线只聚合同一单位：先按单位分桶，取记录最多的单位作为主系列。
-// 日期轴固定为最近 7 个自然日，缺日留空档，不用相邻日期补位。
+// 柱状图只聚合同一单位：先按单位分桶，取记录最多的单位作为主系列。
+// 日期轴固定为以轴尾结束的最近 15 个自然日，缺日留空槽，不用相邻日期补位。
 // 轴尾取宿主给出的 today（YYYY-MM-DD），「不晚于今天」：晚于今天的日期不画，
 // 也不参与锚点计算，避免一条 2099 的脏数据把真实数据挤出窗口。
 // 日期必须能完整回环解析（2026-13-45 这类溢出日期整条跳过），不影响其它记录。
@@ -529,7 +532,7 @@ function usageSeries(cards, today) {
         return [];
     }
     days.sort();
-    const slots = lastSevenDays(todayKey || days[days.length - 1]);
+    const slots = recentDays(todayKey || days[days.length - 1], CHART_DAYS);
     const series = [];
     for (let i = 0; i < slots.length; i++) {
         const value = primary.totals[slots[i]];
@@ -601,11 +604,11 @@ function validDay(value) {
     return value;
 }
 
-function lastSevenDays(latest) {
+function recentDays(latest, count) {
     const parts = latest.split("-").map(Number);
     const end = Date.UTC(parts[0], parts[1] - 1, parts[2]);
     const days = [];
-    for (let i = 6; i >= 0; i--) {
+    for (let i = count - 1; i >= 0; i--) {
         days.push(new Date(end - i * 86400000).toISOString().slice(0, 10));
     }
     return days;
@@ -656,12 +659,16 @@ function pad2(value) {
     return value < 10 ? "0" + value : String(value);
 }
 
+function round1(value) {
+    return Math.round(value * 10) / 10;
+}
+
 function dataCanvas(platforms, series, cache) {
     const plan = planLayout(platforms.length);
     const nodes = [backgroundNode(CANVAS_HEIGHT)];
     if (plan.mode !== "list") {
-        nodes.push({ text: "近 7 天用量", at: [14, 14], size: 9, fill: "$muted" });
-        drawSeries(nodes, series);
+        nodes.push({ text: "近 15 天用量", at: [14, 14], size: 9, fill: "$muted" });
+        drawBars(nodes, series);
     }
     if (plan.mode === "full") {
         const rings = [];
@@ -715,15 +722,16 @@ function backgroundNode(height) {
     return { path: path, fill: "$card" };
 }
 
-// 缺日的位置留空档：连续的点连成一段，单点只画圆点，不跨空档连线。
-function drawSeries(nodes, series) {
+// 每天一根柱子：15 个等宽槽位按日期顺序排布，缺日不画柱，也不挤占相邻日期的位置。
+// 柱高按数值线性映射到 CHART_TOP–CHART_BOTTOM；单天有值也照常画一根柱子。
+function drawBars(nodes, series) {
     const values = [];
     for (let i = 0; i < series.length; i++) {
         if (series[i] !== null && Number.isFinite(series[i])) {
             values.push(series[i]);
         }
     }
-    if (series.length < 2 || values.length < 2) {
+    if (!values.length) {
         nodes.push({ text: "暂无用量数据", at: [14, 50], size: 10, fill: "$muted" });
         return;
     }
@@ -731,42 +739,21 @@ function drawSeries(nodes, series) {
     const min = Math.min.apply(null, values);
     const low = Math.min(min, 0);
     const span = max > low ? max - low : 1;
-    const points = [];
+    const band = (CHART_RIGHT - CHART_LEFT) / CHART_DAYS;
+    const full = CHART_BOTTOM - CHART_TOP;
     for (let i = 0; i < series.length; i++) {
-        if (series[i] === null || !Number.isFinite(series[i])) {
-            points.push(null);
+        const value = series[i];
+        if (value === null || !Number.isFinite(value)) {
             continue;
         }
-        const x = CHART_LEFT + (CHART_RIGHT - CHART_LEFT) * i / (series.length - 1);
-        const y = CHART_BOTTOM - (series[i] - low) / span * (CHART_BOTTOM - CHART_TOP);
-        points.push([Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
-    }
-
-    let run = [];
-    let lastPoint = null;
-    const flush = () => {
-        if (run.length >= 2) {
-            nodes.push({ points: run, area: CHART_BOTTOM, fill: "$accent", opacity: 0.14 });
-            nodes.push({ points: run, stroke: "$accent", width: 2, cap: "round" });
-        } else if (run.length === 1) {
-            nodes.push({ circle: [run[0][0], run[0][1], 2], fill: "$accent" });
-        }
-        if (run.length) {
-            lastPoint = run[run.length - 1];
-        }
-        run = [];
-    };
-    for (let i = 0; i < points.length; i++) {
-        if (points[i]) {
-            run.push(points[i]);
-        } else {
-            flush();
-        }
-    }
-    flush();
-
-    if (lastPoint) {
-        nodes.push({ circle: [lastPoint[0], lastPoint[1], 2.5], fill: "$accent" });
+        const center = CHART_LEFT + band * (i + 0.5);
+        // 合法读数 0 也保留 1px 高度，让「当天用了一点」和「当天没有数据」看起来不同。
+        const height = Math.max(1, round1((value - low) / span * full));
+        nodes.push({
+            rect: [round1(center - BAR_WIDTH / 2), round1(CHART_BOTTOM - height), BAR_WIDTH, height],
+            r: 2,
+            fill: "$accent",
+        });
     }
     nodes.push({ line: [CHART_LEFT, CHART_BOTTOM, CHART_RIGHT, CHART_BOTTOM], stroke: "$track", width: 1 });
 }

@@ -15,6 +15,9 @@ const TIMEOUT = 2000;
 const COMPLETE_URL = "http://127.0.0.1:3425/v1/magpie/quotas/cards";
 const CHART_LEFT = 14;
 const CHART_RIGHT = 373;
+const CHART_DAYS = 15;
+const CHART_TOP = 26;
+const CHART_BOTTOM = 66;
 
 function call(input) {
     const context = vm.createContext({});
@@ -107,25 +110,22 @@ function assertNoQuota(result) {
     assert.ok(result.storage && typeof result.storage === "object");
 }
 
-// 折线上实际落点的坐标（去重后按 x 排序），用来核对空档和单位聚合。
-function plotted(canvas) {
-    const points = [];
-    for (const node of allNodes(canvas)) {
-        const list = node.points || (node.circle ? [[node.circle[0], node.circle[1]]] : null);
-        if (!list) {
-            continue;
-        }
-        for (const point of list) {
-            if (!points.some(other => other[0] === point[0] && other[1] === point[1])) {
-                points.push([point[0], point[1]]);
-            }
-        }
-    }
-    return points.sort((left, right) => left[0] - right[0]);
+// 柱状图的柱子节点：图区内填充 $accent 的矩形，用来核对槽位、缺日和单位聚合。
+function barNodes(canvas) {
+    return allNodes(canvas).filter(node =>
+        Array.isArray(node.rect) && node.fill === "$accent"
+        && node.rect[1] >= CHART_TOP - 0.1 && node.rect[1] + node.rect[3] <= CHART_BOTTOM + 0.1);
+}
+
+// 柱子中心 x（按 x 排序），与 slotX 对照即可知道每根柱落在第几个日期槽位。
+function bars(canvas) {
+    return barNodes(canvas)
+        .map(node => Math.round((node.rect[0] + node.rect[2] / 2) * 10) / 10)
+        .sort((left, right) => left - right);
 }
 
 function slotX(index) {
-    return Math.round((CHART_LEFT + (CHART_RIGHT - CHART_LEFT) * index / 6) * 10) / 10;
+    return Math.round((CHART_LEFT + (CHART_RIGHT - CHART_LEFT) * (index + 0.5) / CHART_DAYS) * 10) / 10;
 }
 
 // 带本地时区偏移的 ISO 时间，模拟 magpie 写出的 readAt。
@@ -311,10 +311,12 @@ test("同一平台的多账号合并为一行并累加积分", () => {
     assert.ok(labels.includes("86%"));
     assert.ok(labels.includes("97%"));
 
-    // 折线取最近 7 天，三个 WorkBuddy 账号的当日用量相加。
-    const points = nodesWith(result.canvas, "points");
-    assert.equal(points.length, 2, "面积和折线各一个节点");
-    assert.equal(points[0].points.length, 7);
+    // 柱状图取最近 15 天，三个 WorkBuddy 账号的当日用量相加；11-20 至 11-26 共 7 根柱。
+    assert.deepEqual(bars(result.canvas),
+        [slotX(8), slotX(9), slotX(10), slotX(11), slotX(12), slotX(13), slotX(14)]);
+    // 11-20 三账号合计 336.75 为窗口内最大值，柱子应顶到图表上沿。
+    const top = barNodes(result.canvas).find(node => Math.abs(node.rect[0] + node.rect[2] / 2 - slotX(8)) < 0.2);
+    assert.equal(Math.round(top.rect[1] * 10) / 10, CHART_TOP);
 });
 
 test("共享余额只显示一次", () => {
@@ -387,12 +389,11 @@ test("趋势只聚合同一单位，不把积分和 token 相加", () => {
             },
         },
     ]);
-    // 主单位取记录最多的 credits：日期轴止于 11-21，只应落 11-20、11-21 两个点。
-    const points = plotted(result.canvas);
-    assert.deepEqual(points.map(point => point[0]), [slotX(5), slotX(6)]);
+    // 主单位取记录最多的 credits：日期轴止于 11-21，只有 11-20、11-21 两根柱。
+    assert.deepEqual(bars(result.canvas), [slotX(13), slotX(14)]);
 });
 
-test("趋势日期轴取最近 7 个自然日，缺日留空档", () => {
+test("柱状图日期轴取最近 15 个自然日，缺日不画柱", () => {
     const result = dataSource([
         {
             provider: "a",
@@ -409,13 +410,12 @@ test("趋势日期轴取最近 7 个自然日，缺日留空档", () => {
             },
         },
     ]);
-    const points = plotted(result.canvas);
-    assert.deepEqual(points.map(point => point[0]), [slotX(0), slotX(1), slotX(6)]);
-    const stroke = allNodes(result.canvas).find(node => node.stroke === "$accent");
-    assert.equal(stroke.points.length, 2, "空档不能跨日连线");
+    // 轴止于最后一条有效数据 11-26，窗口为 11-12 至 11-26：三根柱落在第 9、10、15 个槽位。
+    assert.deepEqual(bars(result.canvas), [slotX(8), slotX(9), slotX(14)]);
+    assert.equal(barNodes(result.canvas).length, 3, "缺日不补柱");
 });
 
-test("折线日期轴不晚于 today：非法与未来日期不挤掉真实数据", () => {
+test("柱状图日期轴不晚于 today：非法与未来日期不挤掉真实数据", () => {
     const days = [
         { day: "2026-11-20", used: 10 },
         { day: "2026-11-21", used: 20 },
@@ -438,8 +438,7 @@ test("折线日期轴不晚于 today：非法与未来日期不挤掉真实数�
         today: "2026-11-26",
     });
     // 轴止于 today，真实数据落在 11-20、11-21、11-26；脏日期既不占格也不改锚点。
-    const points = plotted(result.canvas);
-    assert.deepEqual(points.map(point => point[0]), [slotX(0), slotX(1), slotX(6)]);
+    assert.deepEqual(bars(result.canvas), [slotX(8), slotX(9), slotX(14)]);
     assertCanvasShape(result.canvas);
 
     // today 本身无法回环解析时按不可知处理，退回旧锚点（最后一条有效数据 11-26）。
@@ -460,10 +459,10 @@ test("折线日期轴不晚于 today：非法与未来日期不挤掉真实数�
         storage: null,
         today: "2026-13-45",
     });
-    assert.deepEqual(plotted(badToday.canvas).map(point => point[0]), [slotX(0), slotX(1), slotX(6)]);
+    assert.deepEqual(bars(badToday.canvas), [slotX(8), slotX(9), slotX(14)]);
 });
 
-test("未提供 today 时折线沿用旧锚点，并跳过无法回环解析的日期", () => {
+test("未提供 today 时柱状图沿用旧锚点，并跳过无法回环解析的日期", () => {
     const result = dataSource([{
         provider: "a",
         name: "A",
@@ -479,8 +478,86 @@ test("未提供 today 时折线沿用旧锚点，并跳过无法回环解析的�
         },
     }]);
     // 没有 today 时锚定最后一条有效数据 11-21，非法日期不能成为锚点。
-    assert.deepEqual(plotted(result.canvas).map(point => point[0]), [slotX(5), slotX(6)]);
+    assert.deepEqual(bars(result.canvas), [slotX(13), slotX(14)]);
     assertCanvasShape(result.canvas);
+});
+
+test("柱状图固定 15 个日期槽位，首尾柱子不越界", () => {
+    const result = call({
+        settings: {},
+        source: ready(JSON.stringify({
+            data: [{
+                provider: "a",
+                name: "A",
+                user: "u1",
+                windows: [{ name: "Credits", used: 10, limit: 100, unit: "credits" }],
+                daily: {
+                    window: "Credits",
+                    days: [
+                        { day: "2026-11-12", used: 1 },
+                        { day: "2026-11-26", used: 10 },
+                    ],
+                },
+            }],
+        })),
+        storage: null,
+        today: "2026-11-26",
+    });
+    // 11-12 与 11-26 是窗口首尾，分别落在第 1、15 个槽位，相隔 14 个槽距。
+    assert.deepEqual(bars(result.canvas), [slotX(0), slotX(14)]);
+    const band = (CHART_RIGHT - CHART_LEFT) / CHART_DAYS;
+    assert.ok(Math.abs((slotX(14) - slotX(0)) - 14 * band) < 0.2, "槽位等距");
+    for (const node of barNodes(result.canvas)) {
+        assert.ok(node.rect[0] >= CHART_LEFT, "柱子不能越过左边界");
+        assert.ok(node.rect[0] + node.rect[2] <= CHART_RIGHT, "柱子不能越过右边界");
+    }
+    assertCanvasShape(result.canvas);
+});
+
+test("只有单天有值时也画一根柱", () => {
+    const result = call({
+        settings: {},
+        source: ready(JSON.stringify({
+            data: [{
+                provider: "a",
+                name: "A",
+                user: "u1",
+                windows: [{ name: "Credits", used: 10, limit: 100, unit: "credits" }],
+                daily: { window: "Credits", days: [{ day: "2026-11-20", used: 7 }] },
+            }],
+        })),
+        storage: null,
+        today: "2026-11-26",
+    });
+    assert.deepEqual(bars(result.canvas), [slotX(8)]);
+    const node = barNodes(result.canvas)[0];
+    assert.equal(node.rect[1], CHART_TOP, "唯一一天的柱子顶到图表上沿");
+});
+
+test("当天有读数但为 0 时保留可见短柱，和缺日区分开", () => {
+    const result = call({
+        settings: {},
+        source: ready(JSON.stringify({
+            data: [{
+                provider: "a",
+                name: "A",
+                user: "u1",
+                windows: [{ name: "Credits", used: 10, limit: 100, unit: "credits" }],
+                daily: {
+                    window: "Credits",
+                    days: [
+                        { day: "2026-11-25", used: 0 },
+                        { day: "2026-11-26", used: 10 },
+                    ],
+                },
+            }],
+        })),
+        storage: null,
+        today: "2026-11-26",
+    });
+    assert.deepEqual(bars(result.canvas), [slotX(13), slotX(14)]);
+    const zero = barNodes(result.canvas).find(node => Math.abs(node.rect[0] + node.rect[2] / 2 - slotX(13)) < 0.2);
+    assert.equal(zero.rect[3], 1, "0 值保留 1px 高度");
 });
 
 test("旧端点直接采用 remaining，并显示缓存时间", () => {
@@ -579,13 +656,13 @@ test("平台数量增加时自动换列并让出图表", () => {
         return dataSource(data);
     };
 
-    // 7 至 14 个：两列，保留折线和圆环。
+    // 7 至 14 个：两列，保留柱状图和圆环。
     const twelve = make(12);
     const twelveLabels = texts(twelve.canvas);
     for (let i = 0; i < 12; i++) {
         assert.ok(twelveLabels.includes("P" + i), "P" + i);
     }
-    assert.ok(twelveLabels.includes("近 7 天用量"));
+    assert.ok(twelveLabels.includes("近 15 天用量"));
     assert.ok(nodesWith(twelve.canvas, "arc").length > 0);
 
     // 15 至 21 个：三列，仍保留图表。
@@ -594,7 +671,7 @@ test("平台数量增加时自动换列并让出图表", () => {
     for (let i = 0; i < 24; i++) {
         assert.ok(twentyFourLabels.includes("P" + i), "P" + i);
     }
-    assert.ok(twentyFourLabels.includes("近 7 天用量"));
+    assert.ok(twentyFourLabels.includes("近 15 天用量"));
     assert.equal(nodesWith(twentyFour.canvas, "arc").length, 0, "平台多时圆环让位给列表");
 
     // 31 个以上：图表全部让位，只保留列表。
@@ -603,7 +680,7 @@ test("平台数量增加时自动换列并让出图表", () => {
     for (let i = 0; i < 40; i++) {
         assert.ok(fortyLabels.includes("P" + i), "P" + i);
     }
-    assert.ok(!fortyLabels.includes("近 7 天用量"));
+    assert.ok(!fortyLabels.includes("近 15 天用量"));
     assert.equal(nodesWith(forty.canvas, "arc").length, 0);
 
     // 超过一页容量时在底部说明未显示数量。
