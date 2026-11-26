@@ -1,0 +1,67 @@
+{
+  "id": "shuiruzhu.hotboard",
+  "name": "热点速览",
+  "titleAccent": "速览",
+  "author": "shuiruzhu",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": ["status.page", "status.canvas", "action", "notice", "storage", "settings", "timer"],
+  "dataVersion": 1,
+  "permissions": { "source.read": "https" },
+  "refreshSeconds": 1800,
+  "homepage": "https://github.com/shuiruzhu/daozai-agent",
+  "network": {
+    "hosts": ["top.baidu.com", "api.bilibili.com", "www.bilibili.com", "oshwhub.com"],
+    "sources": [
+      { "key": "c1", "url": "https://top.baidu.com/api/board?platform=wise&tab={settings.channel1}" },
+      { "key": "c2", "url": "https://api.bilibili.com/x/web-interface/popular?ps=12&pn=1" },
+      { "key": "hw", "url": "https://oshwhub.com/api/project?pageNo=1&pageSize=20" }
+    ],
+    "minRefreshSeconds": 300
+  },
+  "attribution": { "label": "百度热搜 · 哔哩哔哩 · 立创开源" },
+  "settings": [
+    {
+      "key": "channel1",
+      "label": "百度频道",
+      "type": "choice",
+      "default": "realtime",
+      "choices": [
+        { "value": "realtime", "label": "实时热点" },
+        { "value": "car", "label": "汽车" },
+        { "value": "game", "label": "游戏" },
+        { "value": "movie", "label": "电影" },
+        { "value": "teleplay", "label": "电视剧" },
+        { "value": "novel", "label": "小说" }
+      ]
+    },
+    {
+      "key": "show_hw",
+      "label": "立创开源",
+      "type": "choice",
+      "default": "on",
+      "choices": [
+        { "value": "on", "label": "显示" },
+        { "value": "off", "label": "隐藏" }
+      ]
+    },
+    {
+      "key": "daily_notice",
+      "label": "每日热点精选",
+      "type": "choice",
+      "default": "on",
+      "choices": [
+        { "value": "on", "label": "开启" },
+        { "value": "off", "label": "关闭" }
+      ]
+    }
+  ],
+  "statusLayout": {
+    "components": [{ "type": "canvas" }],
+    "style": { "accent": "#FF7A45", "icon": "chart", "surface": "card" }
+  }
+}
