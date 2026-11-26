@@ -3,6 +3,7 @@
   "api_version": 1,
   "version": "1.0.3",
   "receivers": [
+    { "vid": "248D", "pid": "5B5F", "name": "XC TECH 2.4G 无线接收器" },
     { "vid": "0C45", "pid": "FEFE", "name": "Sonix 2.4G 键盘接收器" },
     { "vid": "0B05", "pid": "1AD3", "name": "ROG Cetra True Wireless SpeedNova 2.4G 接收器" },
     { "vid": "320F", "pid": "5112", "name": "IQUNIX 2.4G 键盘接收器" },
