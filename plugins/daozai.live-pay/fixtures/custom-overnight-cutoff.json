@@ -1,0 +1,11 @@
+{
+  "now": 1794762000000,
+  "settings": {
+    "salary": "31000",
+    "payroll_cycle": "custom",
+    "days": "1,2,3,4,5,6,7",
+    "start": "22:00",
+    "end": "06:00",
+    "breaks": "[]"
+  }
+}

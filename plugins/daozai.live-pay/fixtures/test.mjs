@@ -31,7 +31,12 @@ const cases = {
     "invalid-no-days": "invalid",
     "pinned-countdown": "working",
     "pinned-rotate-amount": "working",
-    "pinned-rotate-countdown": "working"
+    "pinned-rotate-countdown": "working",
+    "custom-payday-working": "working",
+    "custom-overnight-cutoff": "working",
+    "custom-payroll-gap": "working",
+    "short-month-payday": "setup",
+    "short-month-payroll": "working"
 };
 
 const engine = runInNewContext(`${read("main.js")}\n({computeState, refresh, toCanvas})`);
@@ -67,7 +72,7 @@ for (const file of readdirSync(new URL("fixtures/", dir)).filter(name => name.en
 
 assert.equal(Object.keys(stateByName).length, Object.keys(cases).length);
 const start = stateByName.start;
-assert.equal(start.shiftsPerMonth, 21);
+assert.equal(start.shiftsPerCycle, 21);
 assert.equal(start.payable, 27000);
 closeTo(start.rate, 22000 / 21 / 27000);
 assert.equal(start.earned, 0);
@@ -96,7 +101,7 @@ assert.equal(stateByName["day-off"].nextStart, at("2026-11-30T09:00:00"));
 assert.equal(stateByName["overnight-break"].shiftStart, at("2026-08-31T22:00:00"));
 assert.equal(stateByName["overnight-break"].nextBoundary, at("2026-09-01T00:30:00"));
 assert.equal(stateByName["overnight-paid"].payable, 25200);
-assert.equal(stateByName["overnight-paid"].shiftsPerMonth, 21);
+assert.equal(stateByName["overnight-paid"].shiftsPerCycle, 21);
 assert.equal(outputByName["overnight-done"].notice.id, "off-2026-08-31");
 assert.equal(outputByName["midnight-done"].notice.id, "off-2026-11-27");
 const pet = name => outputByName[name].canvas.nodes.find(node => node.pet).pet;
@@ -130,3 +135,52 @@ for (const name of ["invalid-overlap", "invalid-bounds", "invalid-no-pay", "inva
     assert.equal(outputByName[name].pinned, undefined, name);
     assert.equal(outputByName[name].canvas.binds, undefined, name);
 }
+
+const textIn = nodes => nodes.flatMap(node => node.group ? textIn(node.group) : [node.text ?? ""]).join(" ");
+const assertPayday = (canvas, day, countdown) => {
+    const labels = textIn(canvas.nodes);
+    assert.match(labels, day);
+    assert.match(labels, countdown);
+};
+
+const custom = stateByName["custom-payday-working"];
+const customOutput = outputByName["custom-payday-working"];
+assert.equal(custom.shiftsPerCycle, 22);
+closeTo(custom.daily, 15000 / 22);
+closeTo(custom.earned, custom.daily * 12900 / 27000);
+assert.equal(customOutput.canvas.binds.remaining.countdown.target_at, at("2026-11-26T18:00:00"));
+assertPayday(customOutput.canvas, /12\s*月\s*5\s*日/, /还有\s*9\s*天/);
+assertPayday(customOutput.pinned.canvas, /发薪/, /还有\s*9\s*天/);
+assert.equal(customOutput.pinned.canvas.height, 22);
+assert.doesNotMatch(textIn(outputByName.working.canvas.nodes), /发薪/);
+
+function stateAt(name, local, settings = {}) {
+    const mock = JSON.parse(read("fixtures/" + name + ".json"));
+    return engine.computeState({...mock, now: at(local) * 1000, tz: {offset_minutes: 480},
+        settings: {...defaults, ...mock.settings, ...settings}});
+}
+
+const overnight = stateByName["custom-overnight-cutoff"];
+assert.equal(overnight.shiftDate, "2026-11-15");
+assert.equal(overnight.shiftsPerCycle, 31);
+assert.equal(overnight.daily, 1000);
+closeTo(stateAt("custom-overnight-cutoff", "2026-11-16T23:00:00").daily, 31000 / 30);
+
+const gap = stateByName["custom-payroll-gap"];
+assert.equal(gap.earned, 0);
+assert.equal(gap.daily, 0);
+assert.equal(outputByName["custom-payroll-gap"].canvas.binds.cash.counter.per_second, 0);
+for (const day of [5, 25]) {
+    const active = stateAt("custom-payroll-gap", "2026-11-" + String(day).padStart(2, "0") + "T14:05:00");
+    assert.equal(active.shiftsPerCycle, 15);
+    closeTo(active.daily, 22000 / 15);
+}
+
+const shortPayday = outputByName["short-month-payday"];
+assertPayday(shortPayday.canvas, /2\s*月\s*28\s*日/, /今天发薪/);
+assertPayday(shortPayday.pinned.canvas, /发薪/, /今天发薪/);
+assertPayday(engine.toCanvas(stateAt("short-month-payday", "2027-02-27T14:05:00")), /2\s*月\s*28\s*日/, /还有\s*1\s*天/);
+assertPayday(engine.toCanvas(stateAt("short-month-payday", "2027-03-01T14:05:00")), /3\s*月\s*31\s*日/, /还有\s*30\s*天/);
+assert.equal(stateAt("short-month-payroll", "2027-02-27T14:05:00").shiftsPerCycle, 28);
+assert.equal(stateByName["short-month-payroll"].shiftsPerCycle, 31);
+assert.equal(stateByName["short-month-payroll"].daily, 1000);

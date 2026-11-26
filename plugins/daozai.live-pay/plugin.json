@@ -3,7 +3,7 @@
   "name": "实时工资",
   "titleAccent": "工资",
   "author": "岛仔",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
@@ -31,6 +31,19 @@
     },
     {"key":"days","label":"工作日","type":"weekdays","default":"1,2,3,4,5"},
     {
+      "key": "payroll_cycle",
+      "label": "计薪周期",
+      "type": "choice",
+      "default": "month",
+      "choices": [
+        {"value":"month","label":"自然月"},
+        {"value":"custom","label":"自定义"}
+      ]
+    },
+    {"key":"cycle_start","label":"自定义起始日","type":"number","default":"16","min":1,"max":31,"step":1,"unit":" 日","precision":0},
+    {"key":"cycle_end","label":"自定义结束日","type":"number","default":"15","min":1,"max":31,"step":1,"unit":" 日","precision":0},
+    {"key":"payday","label":"每月发薪日（0 不显示）","type":"number","default":"0","min":0,"max":31,"step":1,"unit":" 日","precision":0},
+    {
       "key": "pinned_show",
       "label": "常驻显示",
       "type": "choice",
@@ -38,7 +51,8 @@
       "choices": [
         {"value":"amount","label":"金额"},
         {"value":"countdown","label":"下班倒计时"},
-        {"value":"alternate","label":"金额和倒计时轮换"}
+        {"value":"alternate","label":"金额和倒计时轮换"},
+        {"value":"payday","label":"发薪倒计时"}
       ]
     }
   ],

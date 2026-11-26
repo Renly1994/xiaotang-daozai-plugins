@@ -1,0 +1,9 @@
+{
+  "now": 1795673100000,
+  "settings": {
+    "salary": "22000",
+    "payroll_cycle": "custom",
+    "cycle_start": "5",
+    "cycle_end": "25"
+  }
+}
