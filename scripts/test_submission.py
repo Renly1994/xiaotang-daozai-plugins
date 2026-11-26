@@ -166,9 +166,44 @@ def test_preview_publish_packs_reviewed_material_as_community_plugin(monkeypatch
 
 @pytest.mark.parametrize("owner,capabilities", [
     ("tasks", ["card"]), ("status", ["status.page"]),
+    ("quota", ["quota.source"]),
 ])
 def test_owner_output_is_accepted(owner, capabilities):
     submission.check_script(status_manifest(owner=owner, capabilities=capabilities))
+
+
+def test_quota_source_accepts_loopback_submission(plugin, monkeypatch, tmp_path):
+    monkeypatch.setattr(submission, "ROOT", tmp_path)
+    manifest, _ = plugin(fields={
+        "owner": "quota", "capabilities": ["quota.source", "timer", "storage", "settings"],
+        "permissions": {"source.read": "loopback"},
+    }, check_pr=True)
+    assert manifest["permissions"] == {"source.read": "loopback"}
+
+
+def test_quota_source_accepts_reviewed_https_shape():
+    submission.check_script(status_manifest(
+        owner="quota", capabilities=["quota.source", "status.page"],
+        permissions={"source.read": "https"},
+        network={"hosts": ["quota.example.test"], "url": "https://quota.example.test/usage",
+                 "credential": {"label": "访问密钥", "header": "Authorization", "prefix": "Bearer "}},
+    ))
+
+
+@pytest.mark.parametrize("fields,error", [
+    ({"capabilities": ["status.page"]}, "quota.source"),
+    ({"permissions": {"source.read": "file"}}, "permissions"),
+    ({"permissions": {"source.read": "loopback", "other": True}}, "permissions"),
+    ({"permissions": {"source.read": "loopback"}, "capabilities": ["quota.source", "status.page", "action"],
+      "network": {"hosts": ["quota.example.test"]}}, "回环"),
+    ({"permissions": {"source.read": "loopback"}, "attribution": {"label": "本机服务"}}, "回环"),
+    ({"owner": "status", "capabilities": ["status.page"], "permissions": {"source.read": "loopback"}}, "回环"),
+    ({"owner": "status", "capabilities": ["status.page", "quota.source"]}, "quota.source"),
+])
+def test_rejects_incorrect_quota_source_permissions(fields, error):
+    manifest = {"owner": "quota", "capabilities": ["quota.source"], **fields}
+    with pytest.raises(ValueError, match=error):
+        submission.check_script(status_manifest(**manifest))
 
 
 @pytest.mark.parametrize("fields, error", [

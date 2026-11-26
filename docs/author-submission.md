@@ -1,6 +1,6 @@
 # 岛仔插件作者投稿指南
 
-准备 Windows、GitHub 账号和岛仔作者测试版。手里的岛仔如果缺少「设置 → 插件」，请先向维护者获取作者测试版。目前集市接受无外部权限的 JS 待办卡片。
+准备 Windows、GitHub 账号和支持插件的岛仔版本。手里的岛仔如果缺少「设置 → 插件」，请先更新。集市接受待办卡片、独立状态页和 AI 额度来源等插件。AI 额度来源需要岛仔 v0.6.70 或更新版本。
 
 ## 1. 从模板创建插件
 
@@ -25,6 +25,13 @@ plugins/xiaoming.date-countdown/
 - 在 `main.js` 里修改卡片逻辑。模板的 `refresh` 读取用户设置和当天日期，返回要显示的 `card` 和要保留的 `storage`。待办卡片模板使用 `api: 1`、`runtime: "js"`、`owner: "tasks"` 和空的 `permissions`。
 - 将投稿封面保存为 `cover.png`，使用与插件功能相符且有权分发的图片。封面须为 PNG，建议 16:9，最多 256 KiB，宽高最多 1920 × 1080。封面、名称和 README 的写法可参照[官方插件风格](official-style.md)。
 - 复用模板代码时保留原来的 MIT 版权和许可。投稿可附带 `README.md`、`LICENSE` 或 `LICENSE.txt`。PR 的文件范围限定为 `plugins/<插件 ID>/` 下的允许文件。
+
+### AI 额度来源
+
+- 使用 `owner: "quota"` 和 `quota.source`，在「AI 额度」面板展示。权限可留空，或按数据来源申请一种只读权限。
+- 本机服务可使用 `source.read: "loopback"`。由用户授权本机回环地址，清单中不填写 `network` 或 `attribution`。在 README 和 PR 中写明要授权的完整地址、读取的数据和验证过的上游版本。
+- 线上服务可使用 `source.read: "https"`，填写实际使用的域名。需要凭据时，由宿主保存和发送。PR 须说明凭据发往哪个接口、读取哪些数据。
+- 用模拟数据核对正常读数、未授权和取数失败。额度未知时返回 `quota: null`。额度插件先上预览集市，验收后再上正式集市。[额度来源 SDK](https://github.com/Renly1994/xiaotang-daozai/blob/v0.6.70/docs/plugins/sdk-v1-design.md#ai-额度来源)
 
 ## 2. 试装并校验
 
