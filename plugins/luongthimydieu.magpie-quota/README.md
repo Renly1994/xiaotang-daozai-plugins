@@ -28,7 +28,7 @@ Magpie 未运行、数据源未授权、接口不可用或额度未知时，岛�
 - 插件走 SDK 的本机回环数据源，由宿主直连 `127.0.0.1`，不经过系统代理，不带转发头；读取上限沿用宿主的 128 KiB / 2 秒。
 - 窗口的剩余百分比优先取 `windows[].remaining`（旧端点直接给出，0 到 100）；没有该字段时用 `remaining_pct = 100 - used` 换算（`cards` 端点的形态）。`resetsAt` 换算为 Unix 秒的 `reset_at`，`holdsWhy`、`runsOut` 等不认识的字段忽略。
 - 首版只展示一个账号、最多三个窗口。`unlimited` 窗口没有上限，`text` 窗口只有厂商文字，`balance` 是钱包余额（`used` 不是读数），这三类都不换算、不显示；因此只有无限额窗口的账号会显示为未知。
-- 条目级 `error`、`pluginError` 或 `readError` 非空时，该账号本次数据不可信，按未知处理。旧版 magpie 没有 `/quotas/cards` 时，宿主读到 404，同样按未知处理。
+- 条目级 `error`、`pluginError` 或 `readError` 非空时，该账号本次数据不可信，按未知处理。地址不可用（404、超时等）时宿主按离线处理，同样显示为未知；旧版 magpie 没有 `/quotas/cards` 时改填旧端点即可。
 - 窗口名称原样展示，按宿主上限截断到 40 字并去掉控制字符；不猜测或改写 magpie 的窗口名与重置时间。
 
 接口协议和数据结构属于 [yetone/magpie](https://github.com/yetone/magpie) 项目；岛仔由 [Renly1994](https://github.com/Renly1994) 维护。本插件为社区投稿，与上述两个项目没有隶属关系。
