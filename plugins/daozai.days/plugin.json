@@ -3,7 +3,7 @@
   "name": "我的日子",
   "titleAccent": "日子",
   "author": "岛仔",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
@@ -73,9 +73,23 @@
         },
         {
           "key": "yearly",
-          "label": "每年重复",
-          "type": "switch",
-          "default": "false"
+          "label": "重复",
+          "type": "choice",
+          "default": "false",
+          "choices": [
+            {
+              "label": "默认",
+              "value": "false"
+            },
+            {
+              "label": "每月",
+              "value": "monthly"
+            },
+            {
+              "label": "每年",
+              "value": "true"
+            }
+          ]
         },
         {
           "key": "icon",
