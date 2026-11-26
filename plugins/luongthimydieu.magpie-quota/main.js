@@ -24,16 +24,20 @@ SOFTWARE.
 
 // magpie 额度：只读本机 magpie 的额度缓存，在状态详情页按平台汇总展示。
 // 取数地址由用户在「授权数据源」中选择，需填写完整地址：
-//   http://127.0.0.1:3425/v1/magpie/quotas/cards（新端点）
-//   http://127.0.0.1:3425/v1/magpie/quotas（旧端点，窗口里带 remaining）
+//   http://127.0.0.1:3425/v1/magpie/quotas/cards（推荐，只读缓存）
+//   http://127.0.0.1:3425/v1/magpie/quotas?kept=1（旧版 magpie，参数只读缓存）
+// 不带 kept 参数的地址会触发 magpie 向上游刷新，不要在引导文案里推荐。
 // 同一平台的多个账号合并成一行；余额直接显示金额，积分显示剩余数量。
-// 额度页签不再展示读数（quota 始终为 null），所有内容画在自绘画布上。
+// 「AI 额度」页签保留读数：展示当前选中账号的前 3 个可换算窗口。
 
 const COMPLETE_URL = "http://127.0.0.1:3425/v1/magpie/quotas/cards";
+const LEGACY_URL = "http://127.0.0.1:3425/v1/magpie/quotas?kept=1";
 const MAX_WINDOW_LABEL = 40;
 const MAX_PLATFORM_NAME = 20;
 const MAX_ROW_LABEL = 22;
 const MAX_VALUE = 18;
+const MAX_QUOTA_WINDOWS = 3;
+const MAX_TIMESTAMP = 253402300799;
 const CANVAS_WIDTH = 387;
 // 页面总高 = 42（标题栏）+ 画布高度 + 16（底部留白）。岛仔状态页上限 348，
 // 因此画布最高 290；超过会让底部圆角被窗口方角裁掉。
@@ -43,15 +47,19 @@ const CHART_TOP = 26;
 const CHART_BOTTOM = 66;
 const CHART_LEFT = 14;
 const CHART_RIGHT = 373;
+const CACHE_RIGHT = 373;
+const STALE_CACHE_MS = 30 * 60 * 1000;
+const AUTO = ["", "自动", "自动选择", "auto"];
 
 const INDEX_LINES = ["当前地址只返回接口索引", COMPLETE_URL, "点地址复制，改为完整地址"];
 const MISSING_LINES = ["该地址没有 magpie 额度接口", COMPLETE_URL, "点地址复制，核对端口和路径"];
 const UNKNOWN_LINES = ["返回内容不是 magpie 额度接口", COMPLETE_URL, "点地址复制，核对完整地址"];
+const SHAPE_LINES = ["返回数据不是 magpie 额度格式，请核对地址", COMPLETE_URL, "点地址复制，核对端口和路径"];
 const UNAUTHORIZED_LINES = [
     "设置 → 插件 → 已安装 → 授权数据源",
     COMPLETE_URL,
     "点地址复制，粘贴后确认授权",
-    "旧版 magpie 可改用 /v1/magpie/quotas",
+    "旧版：" + LEGACY_URL,
 ];
 const OFFLINE_LINES = ["magpie 未运行，或地址、端口不通", "启动后会自动重试，也可检查授权地址"];
 
@@ -77,55 +85,68 @@ const NOTICES = {
         title: "数据源不是 magpie 额度接口",
         body: "返回内容里没有 data 数组。请核对完整地址与端口，完整示例见插件详情页。",
     },
+    shape: {
+        id: "bad-url-shape",
+        title: "数据格式不符",
+        body: "data 数组里没有可识别的 magpie 额度卡片。请核对完整地址与端口。",
+    },
 };
 
 function refresh(input) {
+    const settings = (input && input.settings) || {};
+    const storage = usableStorage(input && input.storage);
     const source = input && input.source;
     if (!source || source.status !== "ready" || typeof source.text !== "string") {
-        return sourceView(source);
+        return sourceView(source, storage);
     }
 
     const parsed = parseSource(source.text);
     if (parsed.kind === "index") {
-        return messageView("error", "授权地址不完整", INDEX_LINES, NOTICES.index);
+        return messageView("error", "授权地址不完整", INDEX_LINES, NOTICES.index, storage);
     }
     if (parsed.kind === "missing") {
-        return messageView("error", "授权地址不存在", MISSING_LINES, NOTICES.missing);
+        return messageView("error", "授权地址不存在", MISSING_LINES, NOTICES.missing, storage);
     }
     if (parsed.kind === "unknown") {
-        return messageView("error", "数据源不是额度接口", UNKNOWN_LINES, NOTICES.unknown);
+        return messageView("error", "数据源不是额度接口", UNKNOWN_LINES, NOTICES.unknown, storage);
+    }
+    if (parsed.kind === "shape") {
+        return messageView("error", "数据格式不符", SHAPE_LINES, NOTICES.shape, storage);
     }
 
     const cards = parsed.cards;
     const platforms = groupPlatforms(cards);
     const series = usageSeries(cards);
+    const account = selectAccount(cards, settings, storage);
 
-    // 额度页签按需求撤下读数，只在新的状态页展示。
+    // 额度页签沿用 1.1.0 的读数：当前选中账号的前 3 个可换算窗口。
     return {
-        quota: null,
+        quota: quotaView(account),
+        storage: storage,
         status: {
             state: platforms.length ? "succeeded" : "idle",
             label: "magpie 额度",
         },
-        canvas: dataCanvas(platforms, series),
+        canvas: dataCanvas(platforms, series, cacheLabel(cards)),
     };
 }
 
 // 宿主在未授权、离线或意外状态时不会给出读数。
 // 地址不可用分不清「magpie 没运行」和「路径不对」，因此这里不发提醒，只做页面引导。
-function sourceView(source) {
+function sourceView(source, storage) {
     if (!source || source.status === "unconfigured") {
-        return messageView("idle", "用默认地址授权？", UNAUTHORIZED_LINES, NOTICE_UNAUTHORIZED);
+        return messageView("idle", "用默认地址授权？", UNAUTHORIZED_LINES, NOTICE_UNAUTHORIZED, storage);
     }
     return messageView(
         source.status === "offline" ? "offline" : "idle",
         "magpie 未运行或地址不通",
         OFFLINE_LINES,
-        null
+        null,
+        storage
     );
 }
 
-function messageView(state, title, lines, notice) {
+function messageView(state, title, lines, notice, storage) {
     const nodes = [backgroundNode(180)];
     nodes.push({ text: clipText(title, 40), at: [16, 46], size: 15, fill: "$text" });
     for (let i = 0; i < lines.length; i++) {
@@ -146,6 +167,7 @@ function messageView(state, title, lines, notice) {
     }
     const result = {
         quota: null,
+        storage: storage,
         status: { state: state, label: clipText(title, 40) },
         canvas: { height: 180, nodes: nodes },
     };
@@ -155,10 +177,118 @@ function messageView(state, title, lines, notice) {
     return result;
 }
 
+// 当前选中账号：账号设置优先，其次沿用 1.1.0 的 storage.account 固定账号逻辑。
+function selectAccount(cards, settings, storage) {
+    const wanted = normalize(settings.account);
+    if (!isAuto(wanted)) {
+        const match = manualCard(cards, wanted);
+        if (match) {
+            return match;
+        }
+    }
+    return autoCard(cards, storage);
+}
+
+// 显示名、厂商、登录名、别名任一完全一致，且只有一个匹配时才算数。
+function manualCard(cards, wanted) {
+    const matches = cards.filter(card =>
+        [card.provider, card.name, card.alias, card.user].some(field => normalize(field) === wanted));
+    return matches.length === 1 ? matches[0] : null;
+}
+
+// 只有能确认固定账号已经消失时才改选。身份重复或数据缺少身份字段时按未知处理。
+function autoCard(cards, storage) {
+    const pinned = pinnedIdentity(storage.account);
+    if (pinned) {
+        const candidates = cards.filter(card => couldBeAccount(card, pinned));
+        if (candidates.length > 0) {
+            const candidate = candidates[0];
+            const identity = cardIdentity(candidate);
+            if (candidates.length !== 1 || identity[1] !== pinned[1] || (pinned[2] && identity[2] !== pinned[2])) {
+                return null;
+            }
+            storage.account = JSON.stringify(identity);
+            return candidate;
+        }
+    }
+
+    const card = cards.find(candidate => {
+        const identity = cardIdentity(candidate);
+        return identity[0] && cardUsable(candidate) && cardWindows(candidate).length > 0
+            && !cards.some(other => other !== candidate && couldBeAccount(other, identity));
+    });
+    if (card) {
+        storage.account = JSON.stringify(cardIdentity(card));
+    }
+    return card;
+}
+
+function cardIdentity(card) {
+    // Magpie 将远端来源 ID 加在 provider 前，保留完整路径以区分来源。
+    return [normalize(card.provider), normalize(card.user), normalize(card.kind)];
+}
+
+function couldBeAccount(card, [provider, user, kind]) {
+    const [candidateProvider, candidateUser, candidateKind] = cardIdentity(card);
+    return candidateProvider === provider
+        && (!user || !candidateUser || candidateUser === user)
+        && (!kind || !candidateKind || candidateKind === kind);
+}
+
+function pinnedIdentity(value) {
+    if (typeof value !== "string") {
+        return null;
+    }
+    let key;
+    try {
+        key = JSON.parse(value);
+    } catch (error) {
+        return null;
+    }
+    if (!Array.isArray(key) || !key.every(part => typeof part === "string")) {
+        return null;
+    }
+    if (key.length === 5 && key[1]) {
+        // 兼容试装版保存的旧身份，后续使用接口提供的账号类型。
+        return [key[1], key[2], ""];
+    }
+    return key.length === 3 && key[0] ? key : null;
+}
+
+function isAuto(wanted) {
+    for (let i = 0; i < AUTO.length; i++) {
+        if (wanted === AUTO[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function usableStorage(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+// 额度页签只保留能换算成百分比的窗口，形状与 1.1.0 一致。
+function quotaView(card) {
+    if (!card || !cardUsable(card)) {
+        return null;
+    }
+    const mapped = cardWindows(card);
+    const windows = [];
+    for (let i = 0; i < mapped.length && windows.length < MAX_QUOTA_WINDOWS; i++) {
+        const window = { label: mapped[i].label, remaining_pct: mapped[i].remaining_pct };
+        if (mapped[i].reset_at !== undefined) {
+            window.reset_at = mapped[i].reset_at;
+        }
+        windows.push(window);
+    }
+    return windows.length ? { windows: windows } : null;
+}
+
 // 按平台（provider）合并账号。条目报错且没有余额的账号直接舍弃。
 function groupPlatforms(cards) {
     const groups = [];
-    const index = {};
+    const index = Object.create(null);
     for (let i = 0; i < cards.length; i++) {
         const card = cards[i];
         const balance = balanceText(card);
@@ -202,19 +332,18 @@ function groupPlatforms(cards) {
 }
 
 function aggregatePlatform(group) {
-    const windowMap = {};
+    const windowMap = Object.create(null);
     const balances = [];
-    const balanceKeys = {};
+    const walletKeys = Object.create(null);
     let unlimited = false;
 
     for (let i = 0; i < group.cards.length; i++) {
         const card = group.cards[i];
         const balance = balanceText(card);
         if (balance) {
-            const shared = cleanText(card.sharedBalance, 40);
-            const key = shared || balance;
-            if (!balanceKeys[key]) {
-                balanceKeys[key] = true;
+            const key = walletKey(card, i);
+            if (!walletKeys[key]) {
+                walletKeys[key] = true;
                 balances.push(balance);
             }
         }
@@ -270,8 +399,23 @@ function aggregatePlatform(group) {
     };
 }
 
+// 钱包去重：同一 sharedBalance 视为同一个钱包；未声明共享的按账号身份各算各的。
+// 不能用金额做键，否则两个独立的同额钱包会被合成一个。
+function walletKey(card, position) {
+    const shared = normalize(cleanText(card.sharedBalance, 60));
+    if (shared) {
+        return "shared\u0000" + shared;
+    }
+    const parts = [card.provider, card.name, card.alias, card.user, card.kind].map(normalize);
+    if (parts.some(part => part)) {
+        return "account\u0000" + parts.join("\u0000");
+    }
+    return "position\u0000" + position;
+}
+
+// 合并键带上单位：同单位同口径才合并，空单位与非空单位不合并。
 function addWindow(map, window) {
-    const key = normalize(window.label) || "-";
+    const key = (normalize(window.label) || "-") + "\u0000" + normalize(window.unit);
     let entry = map[key];
     if (!entry) {
         entry = {
@@ -333,32 +477,165 @@ function choosePrimary(windows) {
     return total || lowest || windows[0] || null;
 }
 
-// 折线：把各账号 daily.days 按日期相加，取最近 7 天。
+// 折线只聚合同一单位：先按单位分桶，取记录最多的单位作为主系列。
+// 日期轴固定为最近 7 个自然日，缺日留空档，不用相邻日期补位。
 function usageSeries(cards) {
-    const totals = {};
+    const buckets = Object.create(null);
     for (let i = 0; i < cards.length; i++) {
-        const daily = cards[i].daily;
+        const card = cards[i];
+        const daily = card.daily;
         if (!daily || !Array.isArray(daily.days)) {
             continue;
         }
+        const unit = dailyUnit(card, daily);
+        const key = normalize(unit);
+        let bucket = buckets[key];
+        if (!bucket) {
+            bucket = { unit: unit, totals: Object.create(null), records: 0 };
+            buckets[key] = bucket;
+        }
         for (let j = 0; j < daily.days.length; j++) {
             const day = daily.days[j];
-            if (!day || typeof day.day !== "string") {
+            if (!day || typeof day.day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day.day)) {
                 continue;
             }
-            const used = typeof day.used === "number" && Number.isFinite(day.used) && day.used >= 0 ? day.used : 0;
-            totals[day.day] = (totals[day.day] || 0) + used;
+            const used = typeof day.used === "number" && Number.isFinite(day.used) && day.used >= 0
+                ? day.used
+                : null;
+            if (used === null) {
+                continue;
+            }
+            bucket.totals[day.day] = (bucket.totals[day.day] || 0) + used;
+            bucket.records += 1;
         }
     }
-    const days = Object.keys(totals).sort().slice(-7);
+
+    let primary = null;
+    for (const key in buckets) {
+        if (Object.prototype.hasOwnProperty.call(buckets, key) && betterSeries(buckets[key], primary)) {
+            primary = buckets[key];
+        }
+    }
+    if (!primary) {
+        return [];
+    }
+    const days = Object.keys(primary.totals);
+    if (!days.length) {
+        return [];
+    }
+    days.sort();
+    const slots = lastSevenDays(days[days.length - 1]);
     const series = [];
-    for (let i = 0; i < days.length; i++) {
-        series.push(Math.round(totals[days[i]] * 100) / 100);
+    for (let i = 0; i < slots.length; i++) {
+        const value = primary.totals[slots[i]];
+        series.push(value === undefined ? null : Math.round(value * 100) / 100);
     }
     return series;
 }
 
-function dataCanvas(platforms, series) {
+function betterSeries(candidate, current) {
+    if (!current) {
+        return true;
+    }
+    if (candidate.records !== current.records) {
+        return candidate.records > current.records;
+    }
+    const candidateTotal = seriesTotal(candidate);
+    const currentTotal = seriesTotal(current);
+    if (candidateTotal !== currentTotal) {
+        return candidateTotal > currentTotal;
+    }
+    return candidate.unit < current.unit;
+}
+
+function seriesTotal(bucket) {
+    let total = 0;
+    for (const day in bucket.totals) {
+        if (Object.prototype.hasOwnProperty.call(bucket.totals, day)) {
+            total += bucket.totals[day];
+        }
+    }
+    return total;
+}
+
+// 每日用量本身不带单位，按 daily.window 对应的窗口取单位。
+function dailyUnit(card, daily) {
+    const direct = cleanText(daily.unit, 8);
+    if (direct) {
+        return direct;
+    }
+    const label = normalize(daily.window);
+    if (!label || !Array.isArray(card.windows)) {
+        return "";
+    }
+    for (let i = 0; i < card.windows.length; i++) {
+        const window = card.windows[i];
+        if (window && normalize(window.name) === label) {
+            const unit = cleanText(window.unit, 8);
+            if (unit) {
+                return unit;
+            }
+        }
+    }
+    return "";
+}
+
+function lastSevenDays(latest) {
+    const parts = latest.split("-").map(Number);
+    const end = Date.UTC(parts[0], parts[1] - 1, parts[2]);
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+        days.push(new Date(end - i * 86400000).toISOString().slice(0, 10));
+    }
+    return days;
+}
+
+// 缓存时间取展示卡片里最早的 readAt：只要有一张是旧缓存，就不说成刚更新。
+// 缺少或无法解析时不显示这一行。时刻直接采用 readAt 自带的本地时间
+// （magpie 与本机同一时区），避免宿主运行时区与系统不一致时显示成别的时区。
+function cacheLabel(cards) {
+    let oldest = null;
+    let clock = "";
+    for (let i = 0; i < cards.length; i++) {
+        const card = cards[i];
+        // 被舍弃的报错账号不参与页面，也不该影响这行小字。
+        if (!cardUsable(card) && !balanceText(card)) {
+            continue;
+        }
+        const value = card.readAt;
+        if (typeof value !== "string") {
+            continue;
+        }
+        const milliseconds = Date.parse(value);
+        if (!Number.isFinite(milliseconds)) {
+            continue;
+        }
+        if (oldest === null || milliseconds < oldest) {
+            oldest = milliseconds;
+            clock = clockOf(value, milliseconds);
+        }
+    }
+    if (oldest === null) {
+        return "";
+    }
+    const stale = Date.now() - oldest > STALE_CACHE_MS;
+    return (stale ? "较早缓存 " : "缓存 ") + clock;
+}
+
+function clockOf(value, milliseconds) {
+    const match = /^\d{4}-\d{2}-\d{2}T(\d{2}):(\d{2})/.exec(value);
+    if (match) {
+        return match[1] + ":" + match[2];
+    }
+    const when = new Date(milliseconds);
+    return pad2(when.getHours()) + ":" + pad2(when.getMinutes());
+}
+
+function pad2(value) {
+    return value < 10 ? "0" + value : String(value);
+}
+
+function dataCanvas(platforms, series, cache) {
     const plan = planLayout(platforms.length);
     const nodes = [backgroundNode(CANVAS_HEIGHT)];
     if (plan.mode !== "list") {
@@ -375,6 +652,16 @@ function dataCanvas(platforms, series) {
         drawRings(nodes, rings);
     }
     drawList(nodes, platforms, plan);
+    if (cache) {
+        // 唯一新增的视觉元素：一行缓存时间小字，列表模式下放到右下角避开首行。
+        nodes.push({
+            text: cache,
+            at: [CACHE_RIGHT, plan.mode === "list" ? CANVAS_HEIGHT - 3 : 14],
+            size: 9,
+            fill: "$muted",
+            align: "right",
+        });
+    }
 
     return { height: CANVAS_HEIGHT, nodes: nodes };
 }
@@ -407,25 +694,59 @@ function backgroundNode(height) {
     return { path: path, fill: "$card" };
 }
 
+// 缺日的位置留空档：连续的点连成一段，单点只画圆点，不跨空档连线。
 function drawSeries(nodes, series) {
-    if (series.length < 2) {
+    const values = [];
+    for (let i = 0; i < series.length; i++) {
+        if (series[i] !== null && Number.isFinite(series[i])) {
+            values.push(series[i]);
+        }
+    }
+    if (series.length < 2 || values.length < 2) {
         nodes.push({ text: "暂无用量数据", at: [14, 50], size: 10, fill: "$muted" });
         return;
     }
-    const max = Math.max.apply(null, series);
-    const min = Math.min.apply(null, series);
+    const max = Math.max.apply(null, values);
+    const min = Math.min.apply(null, values);
     const low = Math.min(min, 0);
     const span = max > low ? max - low : 1;
     const points = [];
     for (let i = 0; i < series.length; i++) {
+        if (series[i] === null || !Number.isFinite(series[i])) {
+            points.push(null);
+            continue;
+        }
         const x = CHART_LEFT + (CHART_RIGHT - CHART_LEFT) * i / (series.length - 1);
         const y = CHART_BOTTOM - (series[i] - low) / span * (CHART_BOTTOM - CHART_TOP);
         points.push([Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
     }
-    nodes.push({ points: points, area: CHART_BOTTOM, fill: "$accent", opacity: 0.14 });
-    nodes.push({ points: points, stroke: "$accent", width: 2, cap: "round" });
-    const last = points[points.length - 1];
-    nodes.push({ circle: [last[0], last[1], 2.5], fill: "$accent" });
+
+    let run = [];
+    let lastPoint = null;
+    const flush = () => {
+        if (run.length >= 2) {
+            nodes.push({ points: run, area: CHART_BOTTOM, fill: "$accent", opacity: 0.14 });
+            nodes.push({ points: run, stroke: "$accent", width: 2, cap: "round" });
+        } else if (run.length === 1) {
+            nodes.push({ circle: [run[0][0], run[0][1], 2], fill: "$accent" });
+        }
+        if (run.length) {
+            lastPoint = run[run.length - 1];
+        }
+        run = [];
+    };
+    for (let i = 0; i < points.length; i++) {
+        if (points[i]) {
+            run.push(points[i]);
+        } else {
+            flush();
+        }
+    }
+    flush();
+
+    if (lastPoint) {
+        nodes.push({ circle: [lastPoint[0], lastPoint[1], 2.5], fill: "$accent" });
+    }
     nodes.push({ line: [CHART_LEFT, CHART_BOTTOM, CHART_RIGHT, CHART_BOTTOM], stroke: "$track", width: 1 });
 }
 
@@ -466,7 +787,7 @@ function drawRings(nodes, rings) {
 // 平台少时单列，多时两列或三列并压缩行高；平台极多时图表让位。
 function drawList(nodes, platforms, plan) {
     if (!platforms.length) {
-        nodes.push({ text: "没有可显示的账号", at: [14, plan.listY + 26], size: 12, fill: "$muted" });
+        nodes.push({ text: "账号均无额度", at: [14, plan.listY + 26], size: 12, fill: "$muted" });
         return;
     }
     const columns = plan.columns;
@@ -527,8 +848,8 @@ function drawList(nodes, platforms, plan) {
     }
 }
 
-// 识别三类常见错址：接口索引、404 文本、非 magpie 的 JSON 或其它内容。
-// 宿主对非 2xx 一律报离线，脚本拿不到状态码，因此离线不在这里判断。
+// 识别常见错址：接口索引、HTTP 200 却返回 404 文本、非 magpie 的 JSON 或其它内容。
+// 宿主对非 2xx 一律报离线，插件拿不到真实 404 的正文，因此离线不在这里判断。
 function parseSource(text) {
     let payload;
     try {
@@ -545,10 +866,16 @@ function parseSource(text) {
     if (!Array.isArray(payload.data)) {
         return { kind: "unknown" };
     }
-    return {
-        kind: "cards",
-        cards: payload.data.filter(card => card && typeof card === "object" && !Array.isArray(card)),
-    };
+    const cards = payload.data.filter(card => card && typeof card === "object" && !Array.isArray(card));
+    // 有 data 数组但里面没有一张带厂商或显示名的卡片，说明不是额度数据。
+    if (cards.length && !cards.some(recognizableCard)) {
+        return { kind: "shape" };
+    }
+    return { kind: "cards", cards: cards };
+}
+
+function recognizableCard(card) {
+    return Boolean(cleanText(card.provider, 1) || cleanText(card.name, 1));
 }
 
 // 保守判断 404 文本：必须同时出现 404 和“未找到”一类字样。
@@ -590,7 +917,7 @@ function mapWindow(window, index) {
     if (remaining === null && (typeof used !== "number" || !Number.isFinite(used) || used < 0)) {
         return null;
     }
-    return {
+    const mapped = {
         label: cleanText(window.name, MAX_WINDOW_LABEL) || "额度 " + (index + 1),
         remaining_pct: remaining !== null ? remaining : Math.max(0, 100 - used),
         limit: typeof window.limit === "number" && Number.isFinite(window.limit) && window.limit > 0
@@ -598,13 +925,35 @@ function mapWindow(window, index) {
             : null,
         unit: cleanText(window.unit, 8),
     };
+    const reset = timestamp(window.resetsAt);
+    if (reset !== null) {
+        mapped.reset_at = reset;
+    }
+    return mapped;
 }
 
 function remainingPct(value) {
     return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
 }
 
+function timestamp(value) {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const milliseconds = Date.parse(value);
+    if (!Number.isFinite(milliseconds)) {
+        return null;
+    }
+    const seconds = Math.floor(milliseconds / 1000);
+    return seconds >= 0 && seconds <= MAX_TIMESTAMP ? seconds : null;
+}
+
+// 合法数字 0 是有效读数；只有字段缺失或类型非法才算未知。
 function balanceText(card) {
+    if (typeof card.balance === "number" && Number.isFinite(card.balance) && card.balance >= 0) {
+        const currency = cleanText(card.currency, 4);
+        return cleanText(currency + formatAmount(card.balance), 16);
+    }
     return typeof card.balance === "string" && card.balance.trim() ? cleanText(card.balance, 16) : "";
 }
 

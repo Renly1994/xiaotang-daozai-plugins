@@ -15,6 +15,7 @@
     "action",
     "notice",
     "settings",
+    "storage",
     "timer"
   ],
   "refreshSeconds": 60,
@@ -23,6 +24,12 @@
     "source.read": "loopback"
   },
   "settings": [
+    {
+      "key": "account",
+      "label": "账号（「自动选择」或厂商、显示名、登录名）",
+      "type": "text",
+      "default": "自动选择"
+    },
     {
       "key": "address",
       "label": "授权地址（复制到「授权数据源」，改这里不会改变授权）",
