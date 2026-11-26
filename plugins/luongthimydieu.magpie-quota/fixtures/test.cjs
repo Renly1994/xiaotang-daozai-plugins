@@ -415,6 +415,74 @@ test("趋势日期轴取最近 7 个自然日，缺日留空档", () => {
     assert.equal(stroke.points.length, 2, "空档不能跨日连线");
 });
 
+test("折线日期轴不晚于 today：非法与未来日期不挤掉真实数据", () => {
+    const days = [
+        { day: "2026-11-20", used: 10 },
+        { day: "2026-11-21", used: 20 },
+        { day: "2026-11-26", used: 5 },
+        { day: "2026-13-45", used: 999 },
+        { day: "2099-01-01", used: 888 },
+    ];
+    const result = call({
+        settings: {},
+        source: ready(JSON.stringify({
+            data: [{
+                provider: "a",
+                name: "A",
+                user: "u1",
+                windows: [{ name: "Credits", used: 10, limit: 100, unit: "credits" }],
+                daily: { window: "Credits", days },
+            }],
+        })),
+        storage: null,
+        today: "2026-11-26",
+    });
+    // 轴止于 today，真实数据落在 11-20、11-21、11-26；脏日期既不占格也不改锚点。
+    const points = plotted(result.canvas);
+    assert.deepEqual(points.map(point => point[0]), [slotX(0), slotX(1), slotX(6)]);
+    assertCanvasShape(result.canvas);
+
+    // today 本身无法回环解析时按不可知处理，退回旧锚点（最后一条有效数据 11-26）。
+    const badToday = call({
+        settings: {},
+        source: ready(JSON.stringify({
+            data: [{
+                provider: "a",
+                name: "A",
+                user: "u1",
+                windows: [{ name: "Credits", used: 10, limit: 100, unit: "credits" }],
+                daily: {
+                    window: "Credits",
+                    days: days.filter(day => day.day !== "2099-01-01"),
+                },
+            }],
+        })),
+        storage: null,
+        today: "2026-13-45",
+    });
+    assert.deepEqual(plotted(badToday.canvas).map(point => point[0]), [slotX(0), slotX(1), slotX(6)]);
+});
+
+test("未提供 today 时折线沿用旧锚点，并跳过无法回环解析的日期", () => {
+    const result = dataSource([{
+        provider: "a",
+        name: "A",
+        user: "u1",
+        windows: [{ name: "Credits", used: 10, limit: 100, unit: "credits" }],
+        daily: {
+            window: "Credits",
+            days: [
+                { day: "2026-11-20", used: 10 },
+                { day: "2026-11-21", used: 20 },
+                { day: "2026-13-45", used: 999 },
+            ],
+        },
+    }]);
+    // 没有 today 时锚定最后一条有效数据 11-21，非法日期不能成为锚点。
+    assert.deepEqual(plotted(result.canvas).map(point => point[0]), [slotX(5), slotX(6)]);
+    assertCanvasShape(result.canvas);
+});
+
 test("旧端点直接采用 remaining，并显示缓存时间", () => {
     const result = render("legacy-quotas.json");
     assertQuota(result);
@@ -632,7 +700,7 @@ test("三类错址分别发一次性提醒，并在画布上给出引导", () =>
     assert.equal(call({ settings: {}, source: { status: "offline" }, storage: null }).notice, undefined);
 });
 
-test("账号设置优先匹配，多匹配回退自动选择，固定账号保持", () => {
+test("账号设置优先匹配，多匹配按未知处理，固定账号保持", () => {
     // 手动匹配：按登录名选中 WorkBuddy，读数取它的前 3 个窗口，且不写固定账号。
     const manual = render("normal.json", { account: "demo-workbuddy" });
     assertQuota(manual);
@@ -653,10 +721,10 @@ test("账号设置优先匹配，多匹配回退自动选择，固定账号保�
     assertQuota(alias);
     assert.equal(alias.quota.windows[0].label, "W");
 
-    // 多个同名账号不算手动匹配，回退到自动选择。
+    // 多个同名账号不算唯一匹配，按未知处理，不回退自动选择。
     const ambiguous = render("multi-account.json", { account: "WorkBuddy" });
-    assertQuota(ambiguous);
-    assert.equal(ambiguous.quota.windows[0].label, "Premium requests");
+    assertNoQuota(ambiguous);
+    assert.equal(ambiguous.storage.account, undefined, "多匹配时不固定到别的账号");
 
     // 原 storage.account 固定账号逻辑保留。
     const pinned = JSON.stringify(["workbuddy", "jinnn", "subscription"]);
@@ -667,6 +735,28 @@ test("账号设置优先匹配，多匹配回退自动选择，固定账号保�
     });
     assertQuota(held);
     assert.equal(held.quota.windows[0].label, "Credits");
+    assert.equal(held.storage.account, pinned);
+});
+
+test("手动填了失效账号名时 quota 为 null，不固定到别的账号", () => {
+    const missing = render("normal.json", { account: "no-such-account" });
+    assertNoQuota(missing);
+    assert.equal(missing.storage.account, undefined, "找不到指定账号时不能拿别的账号顶上");
+    assert.equal(missing.status.state, "succeeded", "状态页仍正常汇总全部账号");
+    const labels = texts(missing.canvas);
+    for (const name of ["Copilot", "WorkBuddy", "DeepSeek"]) {
+        assert.ok(labels.includes(name), name);
+    }
+    assertCanvasShape(missing.canvas);
+
+    // 已有固定账号时，手动失效也不改写它。
+    const pinned = JSON.stringify(["workbuddy", "jinnn", "subscription"]);
+    const held = call({
+        settings: { account: "no-such-account" },
+        source: ready(fixture("multi-account.json")),
+        storage: { account: pinned },
+    });
+    assertNoQuota(held);
     assert.equal(held.storage.account, pinned);
 });
 

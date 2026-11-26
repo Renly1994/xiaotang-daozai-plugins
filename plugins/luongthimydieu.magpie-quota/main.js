@@ -116,7 +116,7 @@ function refresh(input) {
 
     const cards = parsed.cards;
     const platforms = groupPlatforms(cards);
-    const series = usageSeries(cards);
+    const series = usageSeries(cards, input && input.today);
     const account = selectAccount(cards, settings, storage);
 
     // 额度页签沿用 1.1.0 的读数：当前选中账号的前 3 个可换算窗口。
@@ -177,16 +177,15 @@ function messageView(state, title, lines, notice, storage) {
     return result;
 }
 
-// 当前选中账号：账号设置优先，其次沿用 1.1.0 的 storage.account 固定账号逻辑。
+// 当前选中账号：账号设置为「自动选择」时沿用 1.1.0 的固定/自动逻辑。
+// 手动填了具体账号但找不到唯一匹配时按未知处理，不回退自动选择，
+// 也不改写固定账号，避免页签拿别的账号冒充（与 1.0.0 口径一致）。
 function selectAccount(cards, settings, storage) {
     const wanted = normalize(settings.account);
-    if (!isAuto(wanted)) {
-        const match = manualCard(cards, wanted);
-        if (match) {
-            return match;
-        }
+    if (isAuto(wanted)) {
+        return autoCard(cards, storage);
     }
-    return autoCard(cards, storage);
+    return manualCard(cards, wanted);
 }
 
 // 显示名、厂商、登录名、别名任一完全一致，且只有一个匹配时才算数。
@@ -479,7 +478,12 @@ function choosePrimary(windows) {
 
 // 折线只聚合同一单位：先按单位分桶，取记录最多的单位作为主系列。
 // 日期轴固定为最近 7 个自然日，缺日留空档，不用相邻日期补位。
-function usageSeries(cards) {
+// 轴尾取宿主给出的 today（YYYY-MM-DD），「不晚于今天」：晚于今天的日期不画，
+// 也不参与锚点计算，避免一条 2099 的脏数据把真实数据挤出窗口。
+// 日期必须能完整回环解析（2026-13-45 这类溢出日期整条跳过），不影响其它记录。
+// 未提供 today 时今天不可知，退回旧行为锚定最后一条有效数据，不猜宿主时区。
+function usageSeries(cards, today) {
+    const todayKey = validDay(today);
     const buckets = Object.create(null);
     for (let i = 0; i < cards.length; i++) {
         const card = cards[i];
@@ -496,7 +500,8 @@ function usageSeries(cards) {
         }
         for (let j = 0; j < daily.days.length; j++) {
             const day = daily.days[j];
-            if (!day || typeof day.day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day.day)) {
+            const dayKey = day && validDay(day.day);
+            if (!dayKey || (todayKey && dayKey > todayKey)) {
                 continue;
             }
             const used = typeof day.used === "number" && Number.isFinite(day.used) && day.used >= 0
@@ -505,7 +510,7 @@ function usageSeries(cards) {
             if (used === null) {
                 continue;
             }
-            bucket.totals[day.day] = (bucket.totals[day.day] || 0) + used;
+            bucket.totals[dayKey] = (bucket.totals[dayKey] || 0) + used;
             bucket.records += 1;
         }
     }
@@ -524,7 +529,7 @@ function usageSeries(cards) {
         return [];
     }
     days.sort();
-    const slots = lastSevenDays(days[days.length - 1]);
+    const slots = lastSevenDays(todayKey || days[days.length - 1]);
     const series = [];
     for (let i = 0; i < slots.length; i++) {
         const value = primary.totals[slots[i]];
@@ -578,6 +583,22 @@ function dailyUnit(card, daily) {
         }
     }
     return "";
+}
+
+// 只接受形如 YYYY-MM-DD 且能回环解析的日期：Date.UTC 会把 13 月、45 日这类
+// 越界值滚到下一个月或下一年，回读分量不一致就说明原文不是有效日期。
+function validDay(value) {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return null;
+    }
+    const parts = value.split("-").map(Number);
+    const when = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+    if (when.getUTCFullYear() !== parts[0]
+        || when.getUTCMonth() !== parts[1] - 1
+        || when.getUTCDate() !== parts[2]) {
+        return null;
+    }
+    return value;
 }
 
 function lastSevenDays(latest) {
