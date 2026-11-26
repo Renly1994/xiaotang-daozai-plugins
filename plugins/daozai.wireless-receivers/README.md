@@ -79,6 +79,7 @@
 | `372E:1026` | 前行者 S9 Pro 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7189178633)， [交叉核实](https://github.com/wushuai0802/myfinder-device-battery/blob/main/docs/compatibility.md)。仅此接收器 ID，不涵盖其他 S9 版本。 |
 | `248A:FF30` | 达摩鲨 M3 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7191797692)， [交叉核实](https://github.com/ferloom/Wireless-Device-Battery-Monitor)。按外部实测 ID 纳入，反馈者具体版本待核实；不含 M3S 或有线。 |
 | `1A2C:7FFF` | Semico 2.4G 键盘接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7185050673)， [交叉核实](https://github.com/ferloom/Wireless-Device-Battery-Monitor/issues/136)。共享 ID，不按 AULA S99 等具体型号显示。 |
+| `248D:5B5F` | XC TECH 2.4G 无线接收器，[SC580SE 反馈](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7185050673)，[独立 USB 枚举记录](https://gist.github.com/kissunyeason/ae225724b420451464f2522030e92c57#file-diagnostics-json-L98-L104)。仅按通用接收器显示，不推断具体鼠标型号。 |
 
 ### 外部项目收录
 
