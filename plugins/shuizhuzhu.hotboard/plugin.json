@@ -1,0 +1,87 @@
+{
+  "id": "shuizhuzhu.hotboard",
+  "name": "热点速览",
+  "author": "shuizhuzhu",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": ["status.page", "status.canvas", "settings", "action", "timer", "storage", "notice"],
+  "refreshSeconds": 900,
+  "dataVersion": 1,
+  "permissions": { "source.read": "https" },
+  "network": {
+    "hosts": ["tophub.today", "oshwhub.com"],
+    "sources": [
+      { "key": "c1", "url": "https://tophub.today/n/{settings.channel1}" },
+      { "key": "c2", "url": "https://tophub.today/n/{settings.channel2}" },
+      { "key": "hw", "url": "https://oshwhub.com/api/project?pageNo=1&pageSize=20" }
+    ],
+    "minRefreshSeconds": 600
+  },
+  "attribution": { "label": "今日热榜 · 立创开源", "url": "https://tophub.today" },
+  "settings": [
+    {
+      "key": "channel1",
+      "type": "choice",
+      "label": "第一路频道",
+      "default": "KqndgxeLl9",
+      "choices": [
+        { "value": "KqndgxeLl9", "label": "微博热搜" },
+        { "value": "mproPpoq6O", "label": "知乎热榜" },
+        { "value": "Jb0vmloB1G", "label": "百度实时热点" },
+        { "value": "Q1Vd5Ko85R", "label": "36氪热榜" },
+        { "value": "74KvxwokxM", "label": "哔哩哔哩日榜" },
+        { "value": "WnBe01o371", "label": "微信热文" }
+      ]
+    },
+    {
+      "key": "channel2",
+      "type": "choice",
+      "label": "第二路频道",
+      "default": "Q1Vd5Ko85R",
+      "choices": [
+        { "value": "Q1Vd5Ko85R", "label": "36氪热榜" },
+        { "value": "KqndgxeLl9", "label": "微博热搜" },
+        { "value": "mproPpoq6O", "label": "知乎热榜" },
+        { "value": "Jb0vmloB1G", "label": "百度实时热点" },
+        { "value": "74KvxwokxM", "label": "哔哩哔哩日榜" },
+        { "value": "WnBe01o371", "label": "微信热文" }
+      ]
+    },
+    {
+      "key": "show_hw",
+      "type": "choice",
+      "label": "立创开源硬件",
+      "default": "on",
+      "choices": [
+        { "value": "on", "label": "显示" },
+        { "value": "off", "label": "隐藏" }
+      ]
+    },
+    {
+      "key": "daily_notice",
+      "type": "choice",
+      "label": "每日精选推送",
+      "default": "on",
+      "choices": [
+        { "value": "on", "label": "推送" },
+        { "value": "off", "label": "不推送" }
+      ]
+    }
+  ],
+  "statusLayout": {
+    "components": [
+      { "type": "canvas" },
+      { "type": "list" },
+      { "type": "actions" }
+    ],
+    "style": { "density": "comfortable", "surface": "plain" }
+  },
+  "navigationIcon": {
+    "path": "M4 5H20V19H4Z M7 9H17 M7 13H17 M7 17H13",
+    "background": "#5BADEF"
+  }
+}
