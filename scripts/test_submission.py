@@ -128,11 +128,15 @@ def test_stable_publish_rejects_material_before_packaging(monkeypatch, tmp_path)
     assert not (tmp_path / "package").exists()
 
 
-def test_preview_publish_packs_reviewed_material_as_community_plugin(monkeypatch, tmp_path):
+@pytest.mark.parametrize("description", [None, "经审核的社区材质简介"])
+def test_preview_publish_packs_reviewed_material_as_community_plugin(monkeypatch, tmp_path, description):
     plugin_id = "cayww.liquid-glass"
     manifest = status_manifest(**material_manifest(id=plugin_id, author="轻九九九（@cayww）", version="1.0.2"))
     files = {"plugin.json": json.dumps(manifest, ensure_ascii=False).encode(),
              "sample.wgsl": WGSL, "cover.png": COVER}
+    descriptions = {"daozai.page-shortcuts": "官方插件简介"}
+    if description is not None:
+        descriptions[plugin_id] = description
 
     def read_main(_repo, *args):
         if args == ("fetch", "origin", "refs/heads/main"):
@@ -145,6 +149,10 @@ def test_preview_publish_packs_reviewed_material_as_community_plugin(monkeypatch
             return b"official-plugins.json"
         if args == ("show", "reviewed-commit:.github/official-plugins.json"):
             return json.dumps(["daozai.page-shortcuts"]).encode()
+        if args == ("ls-tree", "reviewed-commit", "--", ".github/plugin-descriptions.json"):
+            return b"plugin-descriptions.json"
+        if args == ("show", "reviewed-commit:.github/plugin-descriptions.json"):
+            return json.dumps(descriptions).encode()
         pytest.fail(f"材质打包不应继续读取 {args}")
 
     def read_reviewed(_repo, commit, identifier):
@@ -159,8 +167,10 @@ def test_preview_publish_packs_reviewed_material_as_community_plugin(monkeypatch
     monkeypatch.setattr(publish, "git", read_main)
     monkeypatch.setattr(publish, "read_plugin", read_reviewed)
     monkeypatch.setattr(publish, "daozai", pack)
-    commit, version, bundle, official, description = publish.pack_reviewed(tmp_path, "daozai", plugin_id, "preview")
-    assert (commit, version, official, description) == ("reviewed-commit", "1.0.2", False, None)
+    commit, version, bundle, official, packed_description = publish.pack_reviewed(
+        tmp_path, "daozai", plugin_id, "preview",
+    )
+    assert (commit, version, official, packed_description) == ("reviewed-commit", "1.0.2", False, description)
     assert bundle.read_bytes() == b"bundle"
 
 
