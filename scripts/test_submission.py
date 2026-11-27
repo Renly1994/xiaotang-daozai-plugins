@@ -182,13 +182,32 @@ def test_owner_output_is_accepted(owner, capabilities):
     submission.check_script(status_manifest(owner=owner, capabilities=capabilities))
 
 
-def test_quota_source_accepts_loopback_submission(plugin, monkeypatch, tmp_path):
+@pytest.mark.parametrize("owner,capability,source", [
+    ("quota", "quota.source", "loopback"),
+    ("status", "status.page", "loopback"),
+    ("status", "status.page", "file"),
+])
+def test_local_source_submission(plugin, monkeypatch, tmp_path, owner, capability, source):
     monkeypatch.setattr(submission, "ROOT", tmp_path)
     manifest, _ = plugin(fields={
-        "owner": "quota", "capabilities": ["quota.source", "timer", "storage", "settings"],
-        "permissions": {"source.read": "loopback"},
+        "owner": owner, "capabilities": [capability, "timer", "storage", "settings"],
+        "permissions": {"source.read": source},
+        "refreshSeconds": 60,
     }, check_pr=True)
-    assert manifest["permissions"] == {"source.read": "loopback"}
+    assert manifest["permissions"] == {"source.read": source}
+
+
+@pytest.mark.parametrize("source", ["loopback", "file"])
+@pytest.mark.parametrize("fields,error", [
+    ({"owner": "tasks", "capabilities": ["card", "status.page"]}, "权限"),
+    ({"network": {"hosts": ["status.example.test"]}}, "network"),
+    ({"attribution": {"label": "本机数据"}}, "attribution"),
+    ({"refreshSeconds": 59}, "refreshSeconds"),
+])
+def test_local_status_source_keeps_permission_boundaries(source, fields, error):
+    manifest = {"permissions": {"source.read": source}, **fields}
+    with pytest.raises(ValueError, match=error):
+        submission.check_script(status_manifest(**manifest))
 
 
 def test_quota_source_accepts_reviewed_https_shape():
@@ -207,7 +226,6 @@ def test_quota_source_accepts_reviewed_https_shape():
     ({"permissions": {"source.read": "loopback"}, "capabilities": ["quota.source", "status.page", "action"],
       "network": {"hosts": ["quota.example.test"]}}, "回环"),
     ({"permissions": {"source.read": "loopback"}, "attribution": {"label": "本机服务"}}, "回环"),
-    ({"owner": "status", "capabilities": ["status.page"], "permissions": {"source.read": "loopback"}}, "回环"),
     ({"owner": "status", "capabilities": ["status.page", "quota.source"]}, "quota.source"),
 ])
 def test_rejects_incorrect_quota_source_permissions(fields, error):
@@ -236,7 +254,7 @@ def test_rejects_incorrect_quota_source_permissions(fields, error):
     ({"minRefreshSeconds": True}, "minRefreshSeconds"),
     ({"network": []}, "network"),
     ({"attribution": "数据来源"}, "attribution"),
-    ({"permissions": {"source.read": "file"}}, "permissions"),
+    ({"permissions": {"source.read": "file", "other": True}}, "permissions"),
 ])
 def test_rejects_manifest_rules(fields, error):
     with pytest.raises(ValueError, match=error):

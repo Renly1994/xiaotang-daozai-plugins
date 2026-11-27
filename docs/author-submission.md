@@ -26,6 +26,12 @@ plugins/xiaoming.date-countdown/
 - 将投稿封面保存为 `cover.png`，使用与插件功能相符且有权分发的图片。封面须为 PNG，建议 16:9，最多 256 KiB，宽高最多 1920 × 1080。封面、名称和 README 的写法可参照[官方插件风格](official-style.md)。
 - 复用模板代码时保留原来的 MIT 版权和许可。投稿可附带 `README.md`、`LICENSE` 或 `LICENSE.txt`。PR 的文件范围限定为 `plugins/<插件 ID>/` 下的允许文件。
 
+### 本机监控状态页
+
+- 用 `owner: "status"` 和 `status.page` 注册独立状态页。在岛仔 v0.6.70 或更新版本中，用户可在插件详情的「授权数据源」选择一个完整本机 HTTP 回环地址（`source.read: "loopback"`），或一个普通本地 UTF-8 文件（`source.read: "file"`）。清单只声明其中一项，本机来源不填 `network` 或 `attribution`。
+- 宿主把已授权数据交给 `input.source`。两种来源最多读取 128 KiB。回环请求是 GET，读取预算为 2 秒。插件可用 `status.canvas` 自绘详情、`island.pinned` 添加常驻显示、`notice` 发提醒，也可用 `settings`、`storage` 和 `action` 提供设置、保存状态和处理页面操作。声明 `timer` 后，`refreshSeconds` 可填写 60 至 86400 秒。
+- 在 README 和 PR 写明读取的字段、要授权的完整地址或文件用途。需要桥接服务时，附上源码和用户手动启动、停止的方式。试装时核对未授权、正常读数、来源不可用和恢复后的表现。[只读来源 SDK](https://github.com/Renly1994/xiaotang-daozai/blob/v0.6.70/docs/plugins/sdk-v1-design.md#只读数据源)
+
 ### AI 额度来源
 
 - 使用 `owner: "quota"` 和 `quota.source`，在「AI 额度」面板展示。权限可留空，或按数据来源申请一种只读权限。
