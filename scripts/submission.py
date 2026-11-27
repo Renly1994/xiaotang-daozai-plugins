@@ -141,13 +141,18 @@ def check_url(value, hosts, field):
 
 def check_network(manifest, capabilities):
     permissions = manifest.get("permissions")
-    if permissions == {"source.read": "loopback"}:
-        if manifest["owner"] != "quota" or "network" in manifest or "attribution" in manifest:
-            raise ValueError("回环只读权限仅适用于额度来源，且不能声明 network 或 attribution")
+    if permissions in ({"source.read": "loopback"}, {"source.read": "file"}):
+        owner = manifest["owner"]
+        if not (owner == "status" or (owner == "quota" and permissions["source.read"] == "loopback")):
+            raise ValueError("permissions 中的本机文件只读权限仅适用于独立状态页，回环只读权限适用于独立状态页和额度来源")
+        if "network" in manifest or "attribution" in manifest:
+            raise ValueError("本机文件或回环只读权限不能声明 network 或 attribution")
+        if owner == "status" and "refreshSeconds" in manifest:
+            check_refresh(manifest["refreshSeconds"], "refreshSeconds")
         return
     https = permissions == {"source.read": "https"}
     if permissions != {} and not https:
-        raise ValueError("permissions 只支持空权限、HTTPS 只读来源或额度回环只读来源")
+        raise ValueError("permissions 只支持空权限或一种只读来源：HTTPS、本机文件、回环")
     if "network" not in manifest:
         if https or "attribution" in manifest:
             raise ValueError("HTTPS 数据源或 attribution 需要 network")

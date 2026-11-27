@@ -1,4 +1,5 @@
 {
+  "bee.btc": "在状态页查看比特币现货价格及近 24 小时、7 日、30 日走势，支持 USDT 报价和人民币估算，也可在岛上常驻价格曲线。",
   "daozai.days": "把生日、纪念日和重要日期放在岛上，随时看还剩几天。",
   "daozai.gold": "在岛上看人民币或美元现货金价、涨跌和走势。",
   "daozai.live-pay": "按月薪和作息估算今天已赚多少，顺便看还多久下班。",
@@ -6,5 +7,8 @@
   "daozai.page-shortcuts": "展开岛仔，点击底部图标直达已开启的功能页。",
   "daozai.wireless-receivers": "岛仔没识别到你的无线设备？安装并启用这个兼容包试试。仍未识别时，到「设置 → 无线设备 → 设备兼容」点「反馈设备适配」，提交设备型号。兼容范围会持续更新。",
   "daozai.world-clock": "同时看最多十个城市的当地时间和时差。",
-  "luongthimydieu.magpie-quota": "在 AI 额度面板和状态详情页查看本机 magpie 中各账号的剩余额度：按平台汇总、圆环占比、近 15 天用量柱状图。只读 magpie 的本机缓存，不读凭据、不触发上游刷新。使用前需在「授权数据源」填写完整地址 http://127.0.0.1:3425/v1/magpie/quotas/cards（旧版 magpie 用 .../v1/magpie/quotas?kept=1）。"
+  "hawkings.footballscoreboard": "在「状态」页查看关注球队的实时比分和下一场比赛。",
+  "luongthimydieu.magpie-quota": "在 AI 额度面板和状态详情页查看本机 magpie 中各账号的剩余额度：按平台汇总、圆环占比、近 15 天用量柱状图。只读 magpie 的本机缓存，不读凭据、不触发上游刷新。使用前需在「授权数据源」填写完整地址 http://127.0.0.1:3425/v1/magpie/quotas/cards（旧版 magpie 用 .../v1/magpie/quotas?kept=1）。",
+  "sunwenjun131483.stock-tracker": "在状态页查看自选股的现价、涨跌额与幅度，并按成本价和持股数量计算浮动盈亏；岛上常驻条跟随显示第一只股票。",
+  "workbuddy.merit-fish": "在状态页敲击木鱼累积功德，连击可升至两倍和四倍。"
 }

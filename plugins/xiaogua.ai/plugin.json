@@ -2,7 +2,7 @@
   "id": "xiaogua.ai",
   "name": "小米mimo额度",
   "author": "W.g",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "api": 1,
   "runtime": "js",
   "refreshSeconds": 600,
@@ -60,5 +60,12 @@
         }
       ]
     }
-  ]
+  ],
+  "statusLayout": {
+    "components": [
+      {
+        "type": "canvas"
+      }
+    ]
+  }
 }
