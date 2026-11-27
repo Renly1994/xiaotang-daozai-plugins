@@ -1,0 +1,5 @@
+{
+  "camera": [{"name": "Alpha"}, {"name": "Bravo"}, {"name": "Charlie"}, {"name": "Delta"}],
+  "microphone": [{"name": "Echo"}, {"name": "Foxtrot"}, {"name": "Golf"}, {"name": "Hotel"}],
+  "updated_at": 1764150000
+}

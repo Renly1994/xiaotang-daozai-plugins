@@ -1,0 +1,42 @@
+{
+  "id": "chentaoxing.privacy-indicator",
+  "name": "隐私指示",
+  "author": "chentaoxing",
+  "version": "1.4.2",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "island.pinned",
+    "notice",
+    "timer",
+    "storage",
+    "settings"
+  ],
+  "settings": [
+    {
+      "key": "camera_alert",
+      "label": "摄像头爆闪",
+      "type": "switch",
+      "default": "true"
+    },
+    {
+      "key": "mic_alert",
+      "label": "麦克风爆闪",
+      "type": "switch",
+      "default": "true"
+    }
+  ],
+  "refreshSeconds": 60,
+  "dataVersion": 1,
+  "permissions": {
+    "source.read": "file"
+  },
+  "statusLayout": {
+    "components": [{ "type": "canvas" }, { "type": "alert" }, { "type": "list" }]
+  }
+}
