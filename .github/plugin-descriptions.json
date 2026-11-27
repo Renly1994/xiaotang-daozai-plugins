@@ -5,5 +5,6 @@
   "daozai.notes": "在岛上随手记便签，支持搜索、置顶和常驻。",
   "daozai.page-shortcuts": "展开岛仔，点击底部图标直达已开启的功能页。",
   "daozai.wireless-receivers": "岛仔没识别到你的无线设备？安装并启用这个兼容包试试。仍未识别时，到「设置 → 无线设备 → 设备兼容」点「反馈设备适配」，提交设备型号。兼容范围会持续更新。",
-  "daozai.world-clock": "同时看最多十个城市的当地时间和时差。"
+  "daozai.world-clock": "同时看最多十个城市的当地时间和时差。",
+  "luongthimydieu.magpie-quota": "在 AI 额度面板和状态详情页查看本机 magpie 中各账号的剩余额度：按平台汇总、圆环占比、近 15 天用量柱状图。只读 magpie 的本机缓存，不读凭据、不触发上游刷新。使用前需在「授权数据源」填写完整地址 http://127.0.0.1:3425/v1/magpie/quotas/cards（旧版 magpie 用 .../v1/magpie/quotas?kept=1）。"
 }
