@@ -1,0 +1,27 @@
+{
+  "now": 1795703400000,
+  "settings": {
+    "code1": "sh600519",
+    "code2": "sz000001",
+    "code3": "",
+    "cost1": "1600",
+    "cost2": "12",
+    "cost3": "0",
+    "shares1": "100",
+    "shares2": "1000",
+    "shares3": "0",
+    "up_color": "red",
+    "show_profit": "true"
+  },
+  "sources": {
+    "s1": {
+      "status": "offline"
+    },
+    "s2": {
+      "status": "offline"
+    },
+    "s3": {
+      "status": "offline"
+    }
+  }
+}
