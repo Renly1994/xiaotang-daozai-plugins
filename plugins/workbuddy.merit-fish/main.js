@@ -20,6 +20,11 @@ const STAGE_DX = 20;
 const TEXT_X = 287;
 const GREEN = "#3DDC84";   // 连击中但还没进档
 
+// 重置图标：经典双箭头循环（一上一下相对），画在 18×18 容器里居中。
+// 宿主不支持 SVG 的 A 圆弧命令，两段圆弧都展开成 C 贝塞尔，宿主和预览器都能画。
+// 上弧右端箭头朝下、下弧左端箭头朝上，箭头尖端贴合各自弧端。
+const RESET_ICON = "M4.06 6.37C5.03 4.54 6.93 3.40 9.00 3.40C11.07 3.40 12.97 4.54 13.94 6.37 M14.40 4.22L13.94 6.37L11.90 5.55 M13.94 11.63C12.97 13.46 11.07 14.60 9.00 14.60C6.93 14.60 5.03 13.46 4.06 11.63 M3.60 13.78L4.06 11.63L6.10 12.45";
+
 // 连击阶梯：0 档普通、1 档每下 ×2、2 档每下 ×4（封顶二档）。
 // 档位只看「当前连击数」，断一次 combo 归 1，直接回 0 档，不会掉回一档。
 const TIER_MULT = [1, 2, 4];
@@ -107,8 +112,8 @@ function fishBody() {
     return [
         { path: ellipse(96, 130, 68, 44), fill: WOOD.deep },
         { path: ellipse(96, 124, 68, 44), fill: WOOD.body },
-        { path: "M48 100C76 90 122 90 148 97", stroke: "#3A2008", width: 5.5, cap: "round" },
-        { path: ellipse(148, 97, 4, 6), fill: "#3A2008" }
+        { path: "M48 100C76 90 116 89 138 99", stroke: "#3A2008", width: 5.5, cap: "round" },
+        { path: ellipse(138, 99, 3.5, 4.5), fill: "#3A2008" }
     ];
 }
 
@@ -196,7 +201,7 @@ function computeState(input) {
     let tickMs = Math.max(0, toInt(saved.tick_ms, lastMs));   // 老版本没有 tick_ms：从上次敲击开始算空档
     let knockSec = Math.max(0, toInt(saved.knock_sec, 0));
 
-    // 1) 一键重置：状态页的原生按钮，点一次清一次（设置页没有按钮类型，开关已废弃）
+    // 1) 一键重置：功德数值右下角的小图标按钮，点一次清一次（设置页没有按钮类型）
     if (id === "reset") {
         total = 0;
         combo = 0;
@@ -300,9 +305,9 @@ function toCanvas(state) {
 
     const shown = comma(total);
     const size = shown.length <= 4 ? 46 : shown.length <= 6 ? 38 : shown.length <= 8 ? 30 : 24;
-    nodes.push({ text: `累计${title}`, at: [TEXT_X, 96], size: 12, align: "center", fill: "$muted" });
+    nodes.push({ text: `累计${title}`, at: [TEXT_X, 82], size: 12, align: "center", fill: "$muted" });
     // 白字打底：没敲击时的常态
-    nodes.push({ text: shown, at: [TEXT_X, 146], size, align: "center", weight: 800, fill: "$text", max_width: 186 });
+    nodes.push({ text: shown, at: [TEXT_X, 126], size, align: "center", weight: 800, fill: "$text", max_width: 186 });
 
     // 连击中在上面盖一层彩色字：没翻倍=绿，翻倍=金。
     // 用 binds 在「连击间隔上限」内淡出——定时帧不会重绘画布，只有 bind 能自己走完，
@@ -310,7 +315,7 @@ function toCanvas(state) {
     const tint = alive ? (tier > 0 ? GOLD : GREEN) : "";
     if (tint) {
         nodes.push({
-            text: shown, at: [TEXT_X, 146], size, align: "center", weight: 800,
+            text: shown, at: [TEXT_X, 126], size, align: "center", weight: 800,
             fill: tint, max_width: 186, opacity: { bind: "tint", map: [1, 0] }
         });
     }
@@ -320,11 +325,24 @@ function toCanvas(state) {
     if (state.overtime) {
         const warn = `超时${humanGap(state.overSec)} · ${title} -${comma(state.penalized)}`;
         nodes.push({
-            text: warn, at: [TEXT_X, 180], size: warn.length <= 14 ? 10.5 : 9.5,
+            text: warn, at: [TEXT_X, 166], size: warn.length <= 14 ? 10.5 : 9.5,
             align: "center", weight: 700, fill: "#FF6B6B", max_width: 176
         });
     }
 
+    // 功德数值右下方的重置图标：18px 深灰实心圆 + 灰白 C 形箭头。
+    // 宿主把 hint 画在节点上方，按钮放到数值右侧且偏下，提示就落在数值右边，不压住数字。
+    const bx = TEXT_X + Math.min(105, 40 + shown.length * 11);
+    const by = 150;
+    nodes.push({
+        rect: [bx, by, 18, 18], r: 9, fill: "#2C3038",
+        hover: { fill: "#454B54", hint: "功德归零" },
+        hit: { action: "reset" }
+    });
+    nodes.push({
+        translate: [bx, by],
+        group: [{ path: RESET_ICON, stroke: "#E8EAED", width: 1.35, cap: "round" }]
+    });
 
     const base = state.knockSec;
     const binds = {};
@@ -357,9 +375,7 @@ function refresh(input) {
         status: {
             state: "idle",
             label: state.title,
-            summary: `累计 ${comma(state.total)}`,
-            // 设置页没有按钮类型，所以"一键重置"放在状态页做原生按钮，点一次清一次
-            actions: [{ id: "reset", label: "重置" }]
+            summary: `累计 ${comma(state.total)}`
         },
         canvas: toCanvas(state),
         storage: {
