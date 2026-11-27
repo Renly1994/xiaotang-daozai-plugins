@@ -7,6 +7,9 @@ const PRE_COLOR = "#63A9FF";
 const DANGER = "#FF7A7A";
 const MINUTE = 60;
 const DAY_MS = 86400000;
+const WEEK_MS = 7 * DAY_MS;
+const CACHE_TTL_MS = 20 * 60 * 1000;
+const LIVE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const FOLLOW_LIMIT = 12;
 
 // 中文名 -> ESPN 英文队名关键字。英文名可直接填，不必查表。
@@ -172,8 +175,8 @@ const LEAGUE_RULES = [
     ["concacaf", "中北美"]
 ];
 
-const STATE_LABEL = { in: "进行中", pre: "未开赛", post: "完场", canceled: "已取消", postponed: "已延期" };
-const STATE_RANK = { in: 0, pre: 1, post: 2, canceled: 3, postponed: 3 };
+const STATE_LABEL = { in: "进行中", pre: "未开赛", post: "完场", cached: "比分缓存", canceled: "已取消", postponed: "已延期" };
+const STATE_RANK = { in: 0, pre: 1, cached: 2, post: 3, canceled: 4, postponed: 4 };
 
 const CN_BY_ALIAS = {};
 for (const name of Object.keys(ALIASES)) {
@@ -451,7 +454,7 @@ function fixtureRound(homeId, awayId, date) {
     return 0;
 }
 
-function buildMatch(event, whoList, today, offset) {
+function buildMatch(event, whoList, today, offset, now) {
     if (!event || !event.competitions || !event.competitions[0]) return null;
     const competition = event.competitions[0];
     const status = (event.status && event.status.type) || (competition.status && competition.status.type) || {};
@@ -471,7 +474,14 @@ function buildMatch(event, whoList, today, offset) {
     const state = matchState(status);
     const kickoff = Date.parse(event.date);
     const local = localParts(event.date, offset);
-    if (local.day !== today && local.day !== shiftDay(today, 1)) return null;
+    // 进行中的比赛不按开球日筛选：跨午夜的比赛仍要保留。
+    // 未开赛的比赛允许落在未来一周内，方便直接计算「下一场」；完场仍只看今天/明天。
+    if (state === "pre") {
+        if (local.day < today || local.day > shiftDay(today, 7)) return null;
+    } else if (state !== "in") {
+        if (local.day !== today && local.day !== shiftDay(today, 1)) return null;
+    }
+    if (state === "in" && Number.isFinite(kickoff) && now && now - kickoff > LIVE_MAX_AGE_MS) return null;
     const detail = clean(status.detail) || clean(status.shortDetail);
     const league = leagueOf(event, competition);
     const round = state === "pre" && ROUND_LEAGUES.has(league)
@@ -499,42 +509,118 @@ function buildMatch(event, whoList, today, offset) {
 
 const BOARD_KEYS = ["board", "chn"];
 
-function parseSources(sources, whoList, today, offset) {
+function cacheAgeText(at, now) {
+    const minutes = Math.max(1, Math.floor((now - at) / 60000));
+    if (minutes < 60) return `${minutes} 分钟前`;
+    return `${Math.floor(minutes / 60)} 小时前`;
+}
+
+function parseSources(sources, whoList, today, offset, now, storage) {
     const bag = sources && typeof sources === "object" ? sources : {};
+    const cacheBag = storage && storage.sourceCache && typeof storage.sourceCache === "object" ? storage.sourceCache : {};
     const byId = new Map();
-    let readyCount = 0;
+    const sourceCache = {};
+    const sourceStates = {};
+    let validCount = 0;
+    let cachedCount = 0;
     let invalidCount = 0;
     let unconfigured = false;
+    let cacheAt = 0;
     let events = 0;
+
+    const add = (match, fromCache) => {
+        const old = byId.get(match.id);
+        if (!old) {
+            byId.set(match.id, match);
+            return;
+        }
+        // 有效实时数据永远优先于缓存；两路都有效时，进行中的状态优先。
+        if (!fromCache && (old.cached || (old.state !== "in" && match.state === "in"))) {
+            byId.set(match.id, match);
+        }
+    };
+
     for (const key of BOARD_KEYS) {
         const source = bag[key];
         const status = source && typeof source.status === "string" ? source.status : "unconfigured";
-        if (status !== "ready") {
-            if (status === "unconfigured") unconfigured = true;
+        if (status === "unconfigured") unconfigured = true;
+        let valid = false;
+        let list = [];
+
+        if (status === "ready") {
+            let data = null;
+            try {
+                data = JSON.parse(source.text || "");
+            } catch (error) {
+                data = null;
+            }
+            if (data && typeof data === "object" && Array.isArray(data.events)) {
+                valid = true;
+                list = data.events;
+            } else {
+                invalidCount += 1;
+                sourceStates[key] = { status: "invalid", at: 0 };
+            }
+        } else {
+            sourceStates[key] = { status, at: 0 };
+        }
+
+        if (valid) {
+            validCount += 1;
+            events += list.length;
+            const matches = [];
+            for (const event of list) {
+                const match = buildMatch(event, whoList, today, offset, now);
+                if (!match) continue;
+                match.sourceKey = key;
+                matches.push(match);
+                add(match, false);
+            }
+            // 有效但为空也是有效快照，要把旧缓存清掉，不能当成接口故障。
+            sourceCache[key] = { at: now, matches: matches.slice(0, 20) };
+            sourceStates[key] = { status: "ready", at: now, events: list.length };
             continue;
         }
-        let data;
-        try {
-            data = JSON.parse(source.text || "");
-        } catch (error) {
-            invalidCount += 1;
-            continue;
+
+        const previous = cacheBag[key];
+        const at = previous && Number(previous.at) || 0;
+        const rows = previous && Array.isArray(previous.matches) ? previous.matches : [];
+        const relevant = rows.filter(item =>
+            item && item.home && item.away &&
+            whoList.some(who => teamHit(item.home, who) || teamHit(item.away, who))
+        );
+        if (status !== "unconfigured" && at > 0 && relevant.length && now - at <= CACHE_TTL_MS) {
+            cachedCount += 1;
+            cacheAt = cacheAt ? Math.min(cacheAt, at) : at;
+            sourceCache[key] = previous;
+            sourceStates[key] = { status: "cached", at, events: relevant.length };
+            const age = cacheAgeText(at, now);
+            for (const item of relevant) {
+                const match = Object.assign({}, item, {
+                    sourceKey: key,
+                    cached: true,
+                    cacheAt: at,
+                    cacheAge: age
+                });
+                if (match.state === "in") {
+                    match.state = "cached";
+                    match.detail = `缓存 · ${age}`;
+                }
+                add(match, true);
+            }
         }
-        const list = data && Array.isArray(data.events) ? data.events : [];
-        events += list.length;
-        for (const event of list) {
-            const match = buildMatch(event, whoList, today, offset);
-            if (match && !byId.has(match.id)) byId.set(match.id, match);
-        }
-        readyCount += 1;
     }
-    if (readyCount) return { ready: true, parsed: true, status: "ready", matches: [...byId.values()], events };
+
     return {
-        ready: false,
+        ready: validCount > 0 || cachedCount > 0,
         parsed: invalidCount === 0,
-        status: invalidCount ? "invalid" : unconfigured ? "unconfigured" : "offline",
-        matches: [],
-        events
+        status: validCount ? "ready" : cachedCount ? "cached" : invalidCount ? "invalid" : unconfigured ? "unconfigured" : "offline",
+        matches: [...byId.values()],
+        events,
+        sourceCache,
+        sourceStates,
+        cached: cachedCount > 0,
+        cacheAt
     };
 }
 
@@ -570,23 +656,22 @@ function fixtureMatch(item, whoList, offset) {
     };
 }
 
-function fixtureNextMatches(teams, today, offset, now, seenIds) {
+function fixtureNextMatches(teams, today, offset, now, seenIds, maxKick) {
     const out = [];
-    const minKick = now - 60000;
     for (const team of teams) {
         const rows = FIXTURES[team.id] || [];
         for (const item of rows) {
             const kickoff = Date.parse(item.d);
             if (!Number.isFinite(kickoff)) continue;
-            if (kickoff < minKick) continue;
+            // 只认未来一周内的比赛；刚好过了开球时间的不能算「下一场」。
+            if (kickoff < now || kickoff > maxKick) continue;
             const match = fixtureMatch(item, teams, offset);
             if (!match) continue;
             const key = `${match.day}-${match.home.id}-${match.away.id}`;
-            if (!seenIds.has(match.id) && !seenIds.has(key)) {
-                seenIds.add(match.id);
-                seenIds.add(key);
-                out.push(match);
-            }
+            if (seenIds.has(match.id) || seenIds.has(key)) continue;
+            seenIds.add(match.id);
+            seenIds.add(key);
+            out.push(match);
             break;
         }
     }
@@ -610,9 +695,12 @@ function summarize(match, today) {
         return `${match.labelHome} ${match.home.score}-${match.away.score} ${match.labelAway} ${match.detail || "LIVE"}`.trim();
     }
     if (match.state === "pre") {
-        return `${match.labelHome} vs ${match.labelAway} ${shortDay(match.day, today)} ${match.time}`;
+        return `${match.labelHome} vs ${match.labelAway} ${shortDay(match.day, today)} ${match.time}${match.cached ? ` · 缓存 ${match.cacheAge || ""}` : ""}`.trim();
     }
-    return `${match.labelHome} ${match.home.score}-${match.away.score} ${match.labelAway} 完场`;
+    if (match.state === "cached") {
+        return `${match.labelHome} ${match.home.score}-${match.away.score} ${match.labelAway} · 缓存 ${match.cacheAge || ""}`.trim();
+    }
+    return `${match.labelHome} ${match.home.score}-${match.away.score} ${match.labelAway} 完场${match.cached ? ` · 缓存 ${match.cacheAge || ""}` : ""}`.trim();
 }
 
 function measure(text, size) {
@@ -631,6 +719,8 @@ function textNode(text, x, y, size, fill, extra) {
 }
 
 function statePill(match, today) {
+    if (match.state === "cached") return { text: `比分缓存 · ${match.cacheAge || "最近一次"}`, tone: "dead" };
+    if (match.cached) return { text: `缓存 · ${match.cacheAge || "最近一次"}`, tone: "dead" };
     if (match.state === "in") return { text: match.detail ? `进行中 ${match.detail}` : "进行中", tone: "live" };
     if (match.state === "pre") return { text: `${dayLabel(match.day, today)} ${match.time} 开赛`, tone: "pre" };
     if (match.state === "post") return { text: match.detail && match.detail !== "FT" ? match.detail : "完场", tone: "post" };
@@ -705,7 +795,7 @@ function waitingPinned(teams, view) {
 
 function emptyPinned(teams, view) {
     const warn = teams.length > 0 && !view.ready;
-    const body = warn ? "赛程暂不可用" : "点岛选球队";
+    const body = warn ? "比分服务暂不可用" : "点岛选球队";
     const max = 126;
     return {
         canvas: {
@@ -724,7 +814,10 @@ function emptyPinned(teams, view) {
 function footer(nodes, height, view, now, offset) {
     const base = height - 7;
     const extra = view.matches.length > 4 ? ` · 还有 ${view.matches.length - 4} 场` : "";
-    nodes.push(textNode(`更新 ${clockText(now, offset)}${extra}`, 8, base, 8.5, "$muted", { max_width: 210 }));
+    const stamp = view.cached && view.dataAt
+        ? `缓存 ${clockText(view.dataAt, offset)}`
+        : `更新 ${clockText(now, offset)}`;
+    nodes.push(textNode(`${stamp}${extra}`, 8, base, 8.5, "$muted", { max_width: 210 }));
     nodes.push({
         rect: [242, base - 13, 58, 18], r: 5, fill: "$track",
         hover: { fill: "$card" }, hit: { action: "open-picker" }
@@ -846,9 +939,11 @@ function pageCanvas(view, now, offset) {
         align: "center", weight: 700, max_width: pillWidth - 14
     }));
 
-    const subline = match.state === "pre"
-        ? `${match.league}${match.round ? ` · 第${match.round}轮` : ""}`
-        : (match.venue || match.league);
+    const subline = match.cached
+        ? `缓存数据 · ${match.cacheAge || "最近一次"}`
+        : match.state === "pre"
+            ? `${match.league}${match.round ? ` · 第${match.round}轮` : ""}`
+            : (match.venue || match.league);
     nodes.push(textNode(subline, 193.5, 142, 9.5, "$muted", { align: "center", max_width: 340 }));
 
     if (match.state === "in") {
@@ -869,7 +964,7 @@ function pageCanvas(view, now, offset) {
         if (hc) nodes.push({ image: hc, rect: [8, y + 15, 13, 13], fit: "contain" });
         if (ac) nodes.push({ image: ac, rect: [366, y + 15, 13, 13], fit: "contain" });
         nodes.push(textNode(`${row.league} · ${shortDay(row.day, today)} ${row.time}`, 8, y + 9, 8.5, "$muted", { max_width: 220 }));
-        nodes.push(textNode(live ? (row.detail || "进行中") : STATE_LABEL[row.state], 379, y + 9, 8.5,
+        nodes.push(textNode(row.cached ? `缓存 · ${row.cacheAge || ""}` : live ? (row.detail || "进行中") : STATE_LABEL[row.state], 379, y + 9, 8.5,
             "$muted", { align: "right", max_width: 90 }));
         nodes.push(textNode(shortCn(row.labelHome), 24, y + 25, 11.5, "$text", { max_width: 118 }));
         nodes.push(textNode(shortCn(row.labelAway), 363, y + 25, 11.5, "$text", { align: "right", max_width: 118 }));
@@ -887,7 +982,9 @@ function emptyPage(view, now, offset) {
     const nodes = [];
     const teams = view.teams;
     const title = teams.length ? cut(teams.map(team => team.label || team.raw).join("、"), 14) : "还没有关注球队";
-    const note = teams.length ? "下一场待公布" : "支持英超 / 西甲 / 意甲 / 德甲 / 法甲 / 中超";
+    const note = teams.length
+        ? (!view.boardReady && !view.hasFixtures ? "比分服务暂不可用" : "下一场待公布")
+        : "支持英超 / 西甲 / 意甲 / 德甲 / 法甲 / 中超";
     nodes.push(textNode(title, 193.5, 38, 16, "$text", { align: "center", weight: 800, max_width: 350 }));
     nodes.push(textNode(note, 193.5, 62, 10, "$muted", { align: "center", max_width: 340 }));
     nodes.push({
@@ -909,7 +1006,9 @@ function normalizeStorage(input) {
         following: Array.isArray(storage.following) ? storage.following.filter(id => TEAM_CN[clean(id)]).slice(0, FOLLOW_LIMIT).map(clean) : [],
         picker: !!storage.picker,
         pickerLeague: PICKER_LEAGUES.includes(storage.pickerLeague) ? storage.pickerLeague : "epl",
-        cache: Array.isArray(storage.cache) ? storage.cache.slice(0, 20) : []
+        cache: Array.isArray(storage.cache) ? storage.cache.slice(0, 20) : [],
+        cacheAt: Number(storage.cacheAt) || 0,
+        sourceCache: storage.sourceCache && typeof storage.sourceCache === "object" ? storage.sourceCache : {}
     };
 }
 
@@ -933,34 +1032,35 @@ function compute(input) {
         : new Date(now + offset * 60000).toISOString().slice(0, 10);
     const teams = selectedTeams(settings, storage);
     const selected = validDay(settings.date) ? settings.date : today;
-    const minKick = selected > today ? dayNumber(selected) * DAY_MS : now;
+    const maxKick = now + WEEK_MS;
 
-    let board = parseSources(input && input.sources, teams, today, offset);
-    if (!board.ready && storage.cache.length) {
-        board = { ready: true, parsed: true, status: "ready", matches: storage.cache, events: board.events };
-    }
+    const board = parseSources(input && input.sources, teams, today, offset, now, storage);
     const seenIds = new Set();
     for (const match of board.matches) {
         seenIds.add(match.id);
         seenIds.add(`${match.day}-${match.home.id}-${match.away.id}`);
     }
-    const fixtures = fixtureNextMatches(teams, today, offset, minKick, seenIds);
-    const matches = [...board.matches, ...fixtures];
+    const fixtures = fixtureNextMatches(teams, today, offset, now, seenIds, maxKick);
+    const matches = [...board.matches, ...fixtures]
+        .filter(match => match.state !== "pre" || (match.kickoff && match.kickoff >= now));
     sortMatches(matches);
     const liveMatches = matches.filter(match => match.state === "in");
-    const nextMatch = matches.filter(match => match.state === "pre")
+    const cachedMatches = matches.filter(match => match.cached);
+    const nextMatch = matches.filter(match => match.state === "pre" && match.kickoff >= now && match.kickoff <= maxKick)
         .sort((a, b) => a.kickoff - b.kickoff)[0] || null;
-    const focus = liveMatches[0] || nextMatch || null;
+    const focus = liveMatches[0] || nextMatch || cachedMatches[0] || null;
 
     // 进球与完场提醒：只比较上一次看到的同一场比赛，避免首次加载就推送。
     const seen = {};
     for (const match of board.matches) {
+        if (match.cached) continue;
         seen[match.id] = { h: match.home.score, a: match.away.score, state: match.state };
     }
     const sent = storage.sent.slice();
     const pending = storage.pending.slice();
-    if (board.ready) {
+    if (board.ready && !board.cached) {
         for (const match of board.matches) {
+            if (match.cached) continue;
             const before = storage.seen[match.id];
             if (!before) continue;
             if (match.state === "in" && (match.home.score > before.h || match.away.score > before.a)) {
@@ -988,15 +1088,20 @@ function compute(input) {
     }
 
     const ready = board.ready || fixtures.length > 0;
+    const focusCached = !!(focus && focus.cached);
     const view = {
         ready,
         boardReady: board.ready,
         parsed: board.parsed,
         status: board.status,
+        cached: focusCached,
+        dataAt: focusCached ? focus.cacheAt : now,
+        hasFixtures: fixtures.length > 0,
         events: board.events,
         teams,
         following: storage.following,
         matches,
+        cachedMatches,
         liveMatches,
         nextMatch,
         focus,
@@ -1008,10 +1113,11 @@ function compute(input) {
 
     const live = liveMatches.length > 0;
     const summary = live ? summarize(liveMatches[0], today)
-        : nextMatch ? `${nextMatch.labelHome} vs ${nextMatch.labelAway} · ${shortDay(nextMatch.day, today)} ${nextMatch.time}`
-        : teams.length ? "下一场待公布" : "先选关注球队";
+        : nextMatch ? summarize(nextMatch, today)
+        : cachedMatches.length ? summarize(cachedMatches[0], today)
+        : teams.length ? (ready ? "下一场待公布" : "比分服务暂不可用") : "先选关注球队";
 
-    const nextRefresh = live ? 60 : 300;
+    const nextRefresh = live || board.cached ? 60 : 300;
     const rotate = liveMatches.slice(0, 3);
     let pinned;
     if (rotate.length > 1) {
@@ -1020,6 +1126,8 @@ function compute(input) {
         pinned = pinnedCanvas(rotate[0], today);
     } else if (nextMatch) {
         pinned = pinnedCanvas(nextMatch, today);
+    } else if (cachedMatches.length) {
+        pinned = pinnedCanvas(cachedMatches[0], today);
     } else if (teams.length && ready) {
         pinned = waitingPinned(teams, view);
     } else {
@@ -1044,7 +1152,9 @@ function compute(input) {
             following: storage.following,
             picker: storage.picker,
             pickerLeague: storage.pickerLeague,
-            cache: board.matches.slice(0, 20)
+            cache: board.matches.slice(0, 20),
+            cacheAt: board.cached ? (storage.cacheAt || board.cacheAt) : (board.ready ? now : storage.cacheAt),
+            sourceCache: board.sourceCache
         },
         next_refresh_at: nowSeconds + nextRefresh
     };

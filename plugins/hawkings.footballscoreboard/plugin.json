@@ -3,7 +3,7 @@
   "name": "足球比分牌",
   "titleAccent": "比分牌",
   "author": "hawkings",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
