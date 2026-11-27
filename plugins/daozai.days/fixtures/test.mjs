@@ -37,10 +37,22 @@ test("我的日子由独立功能管理，不向待办输出卡片", () => {
 
 test("普通日合并己方日子与节假日并按日期排序", () => {
     const output = plugin.refresh(input("ordinary"));
-    assert.equal(caption(output), "圣诞聚餐 还有 1 天");
+    assert.equal(caption(output), "还有 1 天 · 圣诞聚餐");
     assert.deepEqual(labels(output).slice(0, 3), ["圣诞聚餐", "朋友", "元旦"]);
     assert.equal(output.canvas.height, 200);
     assert.equal(output.next_refresh_at, Date.parse("2026-12-25T00:00+08:00") / 1000);
+});
+
+test("常驻长名称的自定义倒数优先保留完整天数", () => {
+    const current = input("design");
+    const name = "甲乙丙丁戊己庚辛壬癸甲乙";
+    const settings = {...current.settings, pinned_day: name, days: JSON.stringify([{
+        name, date: "2027-12-31", kind: "countdown", yearly: "false",
+        icon: "flag", color: "red", pinned_text: "默认"
+    }])};
+    const output = plugin.refresh({...current, today: "2026-11-26",
+        now: Date.parse("2026-11-26T12:00+08:00"), settings});
+    assert.equal(caption(output), `还有 400 天 · ${name}`);
 });
 
 test("假期当天与调休上班写入日历标注", () => {
@@ -56,7 +68,7 @@ test("假期当天与调休上班写入日历标注", () => {
 
 test("关闭节假日后仅显示自己的倒数和生日", () => {
     const output = plugin.refresh(input("own-only"));
-    assert.equal(caption(output), "项目交付 还有 7 天");
+    assert.equal(caption(output), "还有 7 天 · 项目交付");
     assert.deepEqual(labels(output), ["项目交付", "小唐"]);
     assert.ok(tickets(output)[1].group.some(node => node.text === "18"));
 });
@@ -66,7 +78,7 @@ test("闰日生日在非闰年落在二月最后一天，闰年保留原日", ()
     assert.equal(caption(ordinary), "今天是 闰日朋友");
     assert.equal(ordinary.notice.title, "闰日朋友 生日快乐");
     const leap = plugin.refresh(input("leap-year"));
-    assert.equal(caption(leap), "闰日朋友 生日还有 1 天");
+    assert.equal(caption(leap), "生日还有 1 天 · 闰日朋友");
     assert.equal(leap.notice, undefined);
 });
 
@@ -140,13 +152,35 @@ test("设置中的每年重复、二十条日子和常驻选择可同时使用",
     assert.ok(tickets(output)[0].group.some(node => node.text === "到期"));
 });
 
+test("每月重复按原日期计算，短月取月末，次月恢复原日", () => {
+    const current = input("own-only");
+    for (const [date, today, expected] of [
+        ["2027-01-31", "2027-02-01", "2027-02-28"],
+        ["2027-01-31", "2027-02-28", "2027-02-28"],
+        ["2027-01-31", "2027-03-01", "2027-03-31"],
+        ["2027-01-31", "2028-02-28", "2028-02-29"],
+        ["2027-01-05", "2027-12-06", "2028-01-05"],
+        ["2028-02-29", "2027-12-31", "2028-02-29"]
+    ]) {
+        const settings = {...current.settings, days: JSON.stringify([{
+            name: "交房租", date, kind: "countdown", yearly: "monthly",
+            icon: "flag", color: "red", pinned_text: "默认"
+        }])};
+        const scenario = {...current, today, now: Date.parse(today + "T12:00+08:00"), settings};
+        const [day] = plugin.computeState(scenario).own;
+        assert.equal(day.dateLabel, expected, today);
+        assert.equal(day.current, today === expected);
+        assert.ok(tickets(plugin.refresh(scenario))[0].group.some(node => node.text?.endsWith("每月")));
+    }
+});
+
 test("恢复最近即使筛选隐藏目标车票，也显示常驻反馈", () => {
     const current = input("design");
     const first = plugin.refresh(current);
     assert.match(caption(first), /元旦/);
     const birthday = tickets(first).find(row => row.group.some(node => node.text === "小唐生日"));
     const chosen = plugin.action({...current, storage: first.storage, action: {id: birthday.hit.action}});
-    assert.match(caption(chosen), /小唐生日 生日还有/);
+    assert.match(caption(chosen), /^生日还有 .* · 小唐生日$/);
     assert.equal(chosen.pinned.canvas.nodes[0].icon, "cake");
     const saved = plugin.refresh({...current, storage: chosen.storage});
     assert.equal(caption(saved), caption(chosen));

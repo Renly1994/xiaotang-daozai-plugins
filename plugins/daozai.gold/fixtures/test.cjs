@@ -36,6 +36,51 @@ test("人民币和美元独立取数，页面切换可记忆，修改设置优�
     assert.ok(messages(run("refresh", { ...input, storage: cny.storage })).includes("946.2"));
 });
 
+test("XAUS 离线时用腾讯伦敦金和美元兑人民币折算，优先使用正常的 XAUS", () => {
+    const input = fixture("tencent");
+    const output = run("refresh", input);
+    assert.equal(output.status.state, "succeeded");
+    assert.ok(messages(output).includes("腾讯行情"));
+    assert.ok(messages(output).includes("$3,565.5 / 盎司"));
+    assert.ok(pinned(output).includes("¥763.5"));
+    assert.ok(pinned(act(input, "unit-usd")).includes("$3,565.5"));
+    const original = fixture("cny");
+    input.sources.cny = quote(original, "cny", input.now, 764.5);
+    assert.ok(pinned(run("refresh", input)).includes("¥764.5"));
+});
+
+test("腾讯黄金过期时撤下报价，缺汇率时仍可切换到美元", () => {
+    const input = fixture("tencent");
+    assert.equal(run("refresh", { ...input, now: input.now + 16 * 60000 }).pinned, null);
+    input.sources.tencent.text = input.sources.tencent.text.split("\n")[0];
+    assert.equal(run("refresh", input).pinned, null);
+    assert.ok(pinned(act(input, "unit-usd")).includes("$3,565.5"));
+});
+
+test("腾讯汇率过旧时提示时效并暂停跨线提醒，超过一天停止折算", () => {
+    const input = fixture("tencent");
+    input.sources.tencent.text = input.sources.tencent.text.replace("20261126181430", "20261126171430");
+    const stale = run("refresh", input);
+    assert.ok(messages(stale).includes("汇率待更新"));
+    assert.ok(!messages(act(input, "unit-usd")).includes("汇率待更新"));
+    input.sources.tencent.text = input.sources.tencent.text.replace("20261126171430", "20261125171430");
+    assert.equal(run("refresh", input).pinned, null);
+});
+
+test("换源时保留历史和提醒去重，跨线提醒只比较同源报价", () => {
+    const input = fixture("tencent");
+    const original = fixture("cny");
+    input.settings = { alert_cny: "764" };
+    const old = run("refresh", { ...input, sources: { cny: quote(original, "cny", input.now - 180000, 764.5) } });
+    const switched = run("refresh", { ...input, storage: old.storage });
+    assert.equal(switched.notice, undefined);
+    assert.equal(switched.storage.cny.day.length, 2);
+    input.now += 60000;
+    input.sources.tencent.text = input.sources.tencent.text.replace("3565.48", "3575.00").replace("18:13:00", "18:15:30");
+    const crossed = run("refresh", { ...input, storage: switched.storage });
+    assert.equal(crossed.notice.id, "gold-cny-764-up");
+});
+
 test("小时和日采样去重，三份历史均最多保留 48 点", () => {
     const input = fixture("cny");
     const start = input.now;
