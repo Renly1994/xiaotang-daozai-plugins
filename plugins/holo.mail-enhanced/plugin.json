@@ -1,0 +1,79 @@
+{
+  "id": "holo.mail-enhanced",
+  "name": "邮箱（增强）",
+  "author": "Holo.",
+  "version": "1.0.6",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "navigationIcon": {
+    "path": "M4 6H20V18H4Z M4 7L12 13L20 7",
+    "background": "#586DA8"
+  },
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "action",
+    "settings",
+    "storage"
+  ],
+  "dataVersion": 1,
+  "permissions": {},
+  "settings": [
+    {
+      "key": "work_name",
+      "label": "工作邮箱分组名（填「自动」显示邮箱）",
+      "type": "text",
+      "default": "自动"
+    },
+    {
+      "key": "personal_name",
+      "label": "个人邮箱分组名（填「自动」显示邮箱）",
+      "type": "text",
+      "default": "自动"
+    },
+    {
+      "key": "project_name",
+      "label": "项目邮箱分组名（填「自动」显示邮箱）",
+      "type": "text",
+      "default": "自动"
+    },
+    {
+      "key": "study_name",
+      "label": "学习邮箱分组名（填「自动」显示邮箱）",
+      "type": "text",
+      "default": "自动"
+    },
+    {
+      "key": "billing_name",
+      "label": "账单邮箱分组名（填「自动」显示邮箱）",
+      "type": "text",
+      "default": "自动"
+    },
+    {
+      "key": "community_name",
+      "label": "社区邮箱分组名（填「自动」显示邮箱）",
+      "type": "text",
+      "default": "自动"
+    },
+    {
+      "key": "start_date",
+      "label": "邮件起始日期（含当天）",
+      "type": "date",
+      "default": "2026-11-01"
+    }
+  ],
+  "statusLayout": {
+    "components": [
+      {
+        "type": "canvas"
+      }
+    ],
+    "style": {
+      "surface": "plain",
+      "accent": "#A3B7FF"
+    }
+  }
+}
