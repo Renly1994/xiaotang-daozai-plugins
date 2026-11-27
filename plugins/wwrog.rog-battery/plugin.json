@@ -1,0 +1,89 @@
+{
+  "id": "wwrog.rog-battery",
+  "name": "ROG 设备电量",
+  "author": "WW",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "settings",
+    "storage",
+    "timer"
+  ],
+  "dataVersion": 1,
+  "permissions": {
+    "source.read": "loopback"
+  },
+  "settings": [
+    {
+      "key": "accent",
+      "label": "图标颜色",
+      "type": "choice",
+      "choices": [
+        {
+          "value": "purple",
+          "label": "ROG 紫"
+        },
+        {
+          "value": "red",
+          "label": "ROG 红"
+        },
+        {
+          "value": "cyan",
+          "label": "朋克青"
+        }
+      ],
+      "default": "purple"
+    },
+    {
+      "key": "keyboard_name",
+      "label": "键盘自定义名称（默认用奥创同步）",
+      "type": "text",
+      "default": "默认"
+    },
+    {
+      "key": "mouse_name",
+      "label": "鼠标自定义名称（默认用奥创同步）",
+      "type": "text",
+      "default": "默认"
+    }
+  ],
+  "statusLayout": {
+    "components": [
+      {
+        "type": "state"
+      },
+      {
+        "type": "metrics",
+        "columns": 2
+      },
+      {
+        "type": "canvas"
+      },
+      {
+        "type": "list"
+      },
+      {
+        "type": "badge"
+      },
+      {
+        "type": "alert"
+      }
+    ],
+    "style": {
+      "accent": "#7B61FF",
+      "density": "compact",
+      "icon": "battery"
+    }
+  },
+  "navigationIcon": {
+    "path": "M12 4 C8 4 6 8 6 12 C6 17 8.5 21 12 21 C15.5 21 18 17 18 12 C18 8 16 4 12 4 Z M12 7 L12 11 M10.5 9 L13.5 9",
+    "background": "#7B61FF"
+  },
+  "refreshSeconds": 60
+}
