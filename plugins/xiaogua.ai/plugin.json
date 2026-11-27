@@ -1,0 +1,71 @@
+{
+  "id": "xiaogua.ai",
+  "name": "小米mimo额度",
+  "author": "W.g",
+  "version": "1.1.1",
+  "api": 1,
+  "runtime": "js",
+  "refreshSeconds": 600,
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "quota",
+  "capabilities": [
+    "settings",
+    "quota.source",
+    "storage",
+    "timer",
+    "island.pinned",
+    "status.page",
+    "status.canvas"
+  ],
+  "dataVersion": 1,
+  "permissions": {
+    "source.read": "https"
+  },
+  "network": {
+    "hosts": [
+      "api.xiaomimimo.com"
+    ],
+    "sources": [
+      {
+        "key": "balance",
+        "url": "https://api.xiaomimimo.com/v1/platform/balance"
+      }
+    ],
+    "credential": {
+      "label": "小米 MiMo API Key（sk- 余额 Key）",
+      "header": "Authorization",
+      "prefix": "Bearer "
+    },
+    "minRefreshSeconds": 60
+  },
+  "attribution": {
+    "label": "小米 MiMo",
+    "url": "https://api.xiaomimimo.com/"
+  },
+  "settings": [
+    {
+      "key": "balance_mode",
+      "label": "余额口径",
+      "type": "choice",
+      "default": "available",
+      "choices": [
+        {
+          "value": "available",
+          "label": "总余额（含冻结）"
+        },
+        {
+          "value": "spendable",
+          "label": "可消费余额（扣除冻结）"
+        }
+      ]
+    }
+  ],
+  "statusLayout": {
+    "components": [
+      {
+        "type": "canvas"
+      }
+    ]
+  }
+}

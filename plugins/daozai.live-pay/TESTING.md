@@ -10,7 +10,7 @@ $fixture = (Resolve-Path .\fixtures\working.json).Path
 node .\fixtures\test.mjs $exe
 ```
 
-`fixtures/test.mjs` 检查业务状态与输出，并用 `--plugin-test` 逐个比对 23 份模拟数据。只传 `node .\fixtures\test.mjs` 时运行 JavaScript 验证。
+`fixtures/test.mjs` 检查业务状态与输出，并用 `--plugin-test` 逐个比对 28 份模拟数据。只传 `node .\fixtures\test.mjs` 时运行 JavaScript 验证。
 
 | 模拟输入 | 预期结果 |
 | --- | --- |
@@ -21,6 +21,8 @@ node .\fixtures\test.mjs $exe
 | `overnight-break`、`overnight-paid`、`overnight-done`、`midnight-done` | 跨午夜的休息和完工正确归属上班日，跨月沿用上班日所在月份 |
 | `invalid-overlap`、`invalid-bounds`、`invalid-no-pay`、`invalid-no-days` | 显示设置校验提示，不输出工资或提醒 |
 | `pinned-countdown`、`pinned-rotate-amount`、`pinned-rotate-countdown` | 常驻可只显示倒计时，也可交给宿主每 8 秒轮换金额和倒计时 |
+| `custom-payday-working`、`custom-overnight-cutoff`、`custom-payroll-gap` | 自定义周期计薪、跨午夜归属与周期外不计薪 |
+| `short-month-payday`、`short-month-payroll` | 短月月末发薪，未填月薪时仍显示发薪倒计时，计薪边界无重叠 |
 
 月薪为零时提示填写设置。各段休息用开关选择计薪，时段冲突提示显示在状态页。金额、每小时收益、倒计时和进度由宿主绑定更新，班次状态按宿主刷新时机切换。
 

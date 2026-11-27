@@ -128,11 +128,15 @@ def test_stable_publish_rejects_material_before_packaging(monkeypatch, tmp_path)
     assert not (tmp_path / "package").exists()
 
 
-def test_preview_publish_packs_reviewed_material_as_community_plugin(monkeypatch, tmp_path):
+@pytest.mark.parametrize("description", [None, "经审核的社区材质简介"])
+def test_preview_publish_packs_reviewed_material_as_community_plugin(monkeypatch, tmp_path, description):
     plugin_id = "cayww.liquid-glass"
     manifest = status_manifest(**material_manifest(id=plugin_id, author="轻九九九（@cayww）", version="1.0.2"))
     files = {"plugin.json": json.dumps(manifest, ensure_ascii=False).encode(),
              "sample.wgsl": WGSL, "cover.png": COVER}
+    descriptions = {"daozai.page-shortcuts": "官方插件简介"}
+    if description is not None:
+        descriptions[plugin_id] = description
 
     def read_main(_repo, *args):
         if args == ("fetch", "origin", "refs/heads/main"):
@@ -145,6 +149,10 @@ def test_preview_publish_packs_reviewed_material_as_community_plugin(monkeypatch
             return b"official-plugins.json"
         if args == ("show", "reviewed-commit:.github/official-plugins.json"):
             return json.dumps(["daozai.page-shortcuts"]).encode()
+        if args == ("ls-tree", "reviewed-commit", "--", ".github/plugin-descriptions.json"):
+            return b"plugin-descriptions.json"
+        if args == ("show", "reviewed-commit:.github/plugin-descriptions.json"):
+            return json.dumps(descriptions).encode()
         pytest.fail(f"材质打包不应继续读取 {args}")
 
     def read_reviewed(_repo, commit, identifier):
@@ -159,8 +167,10 @@ def test_preview_publish_packs_reviewed_material_as_community_plugin(monkeypatch
     monkeypatch.setattr(publish, "git", read_main)
     monkeypatch.setattr(publish, "read_plugin", read_reviewed)
     monkeypatch.setattr(publish, "daozai", pack)
-    commit, version, bundle, official, description = publish.pack_reviewed(tmp_path, "daozai", plugin_id, "preview")
-    assert (commit, version, official, description) == ("reviewed-commit", "1.0.2", False, None)
+    commit, version, bundle, official, packed_description = publish.pack_reviewed(
+        tmp_path, "daozai", plugin_id, "preview",
+    )
+    assert (commit, version, official, packed_description) == ("reviewed-commit", "1.0.2", False, description)
     assert bundle.read_bytes() == b"bundle"
 
 
@@ -172,13 +182,32 @@ def test_owner_output_is_accepted(owner, capabilities):
     submission.check_script(status_manifest(owner=owner, capabilities=capabilities))
 
 
-def test_quota_source_accepts_loopback_submission(plugin, monkeypatch, tmp_path):
+@pytest.mark.parametrize("owner,capability,source", [
+    ("quota", "quota.source", "loopback"),
+    ("status", "status.page", "loopback"),
+    ("status", "status.page", "file"),
+])
+def test_local_source_submission(plugin, monkeypatch, tmp_path, owner, capability, source):
     monkeypatch.setattr(submission, "ROOT", tmp_path)
     manifest, _ = plugin(fields={
-        "owner": "quota", "capabilities": ["quota.source", "timer", "storage", "settings"],
-        "permissions": {"source.read": "loopback"},
+        "owner": owner, "capabilities": [capability, "timer", "storage", "settings"],
+        "permissions": {"source.read": source},
+        "refreshSeconds": 60,
     }, check_pr=True)
-    assert manifest["permissions"] == {"source.read": "loopback"}
+    assert manifest["permissions"] == {"source.read": source}
+
+
+@pytest.mark.parametrize("source", ["loopback", "file"])
+@pytest.mark.parametrize("fields,error", [
+    ({"owner": "tasks", "capabilities": ["card", "status.page"]}, "权限"),
+    ({"network": {"hosts": ["status.example.test"]}}, "network"),
+    ({"attribution": {"label": "本机数据"}}, "attribution"),
+    ({"refreshSeconds": 59}, "refreshSeconds"),
+])
+def test_local_status_source_keeps_permission_boundaries(source, fields, error):
+    manifest = {"permissions": {"source.read": source}, **fields}
+    with pytest.raises(ValueError, match=error):
+        submission.check_script(status_manifest(**manifest))
 
 
 def test_quota_source_accepts_reviewed_https_shape():
@@ -197,7 +226,6 @@ def test_quota_source_accepts_reviewed_https_shape():
     ({"permissions": {"source.read": "loopback"}, "capabilities": ["quota.source", "status.page", "action"],
       "network": {"hosts": ["quota.example.test"]}}, "回环"),
     ({"permissions": {"source.read": "loopback"}, "attribution": {"label": "本机服务"}}, "回环"),
-    ({"owner": "status", "capabilities": ["status.page"], "permissions": {"source.read": "loopback"}}, "回环"),
     ({"owner": "status", "capabilities": ["status.page", "quota.source"]}, "quota.source"),
 ])
 def test_rejects_incorrect_quota_source_permissions(fields, error):
@@ -226,7 +254,7 @@ def test_rejects_incorrect_quota_source_permissions(fields, error):
     ({"minRefreshSeconds": True}, "minRefreshSeconds"),
     ({"network": []}, "network"),
     ({"attribution": "数据来源"}, "attribution"),
-    ({"permissions": {"source.read": "file"}}, "permissions"),
+    ({"permissions": {"source.read": "file", "other": True}}, "permissions"),
 ])
 def test_rejects_manifest_rules(fields, error):
     with pytest.raises(ValueError, match=error):

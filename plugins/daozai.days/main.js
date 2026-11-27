@@ -27,10 +27,10 @@ function weekday(day) {
     return "星期" + "日一二三四五六"[((day + 4) % 7 + 7) % 7];
 }
 
-function yearlyDate(date, year) {
-    const month = Number(date.slice(5, 7));
-    const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-    return Date.UTC(year, month - 1, Math.min(Number(date.slice(8)), maxDay)) / DAY;
+function dayOfMonth(year, month, day) {
+    const date = new Date(0);
+    date.setUTCFullYear(year, month, 0);
+    return date.setUTCDate(Math.min(day, date.getUTCDate())) / DAY;
 }
 
 function settingRows(settings, key) {
@@ -46,18 +46,25 @@ function singleLine(value) {
     return result.trim();
 }
 
-function ownDays(settings, today, year) {
+function ownDays(settings, today, year, month) {
     const options = new Map(settingRows(settings, "day_options").map(row => [singleLine(row.name), row]));
     return settingRows(settings, "days").slice(0, 20).map(row => {
         const settingName = singleLine(row.name);
         const name = [...settingName].slice(0, 12).join("") || "新日子";
         const extra = options.get(settingName) || {};
-        const yearly = row.kind === "birthday" || (row.yearly ?? extra.yearly) === "true";
+        const frequency = row.yearly ?? extra.yearly;
+        const monthly = frequency === "monthly";
+        const yearly = !monthly && (row.kind === "birthday" || frequency === "true");
         const base = Date.parse(row.date) / DAY;
         let date = base;
-        if (yearly) {
-            date = yearlyDate(row.date, year);
-            if (date < today) date = yearlyDate(row.date, year + 1);
+        if (monthly || yearly) {
+            const targetMonth = monthly ? month : Number(row.date.slice(5, 7));
+            const monthDay = Number(row.date.slice(8));
+            date = dayOfMonth(year, targetMonth, monthDay);
+            if (date < today) {
+                date = monthly ? dayOfMonth(year, targetMonth + 1, monthDay)
+                    : dayOfMonth(year + 1, targetMonth, monthDay);
+            }
             date = Math.max(base, date);
         }
         const since = row.kind === "anniversary" && today >= base;
@@ -69,7 +76,7 @@ function ownDays(settings, today, year) {
         const displayDate = since ? base : date;
         const dateLabel = displayDate === base ? row.date : dateText(displayDate);
         return {
-            name, settingName, kind: row.kind, yearly, date, displayDate, dateLabel, days, since,
+            name, settingName, kind: row.kind, monthly, yearly, date, displayDate, dateLabel, days, since,
             current: date === today,
             icon, color,
             template: [...singleLine(template === "默认" ? "" : template)].slice(0, 24).join(""),
@@ -82,7 +89,9 @@ function description(day) {
     if (day.current) return `今天是 ${day.name}`;
     if (day.since) return `${day.name} ${day.days} 天`;
     if (day.days < 0) return `${day.name} 已到期`;
-    return `${day.name} ${day.kind === "birthday" ? "生日" : ""}还有 ${day.days} 天`;
+    const remaining = `还有 ${day.days} 天`;
+    if (day.kind === "holiday") return `${day.name} ${remaining}`;
+    return `${day.kind === "birthday" ? "生日" : ""}${remaining} · ${day.name}`;
 }
 
 function computeState(input) {
@@ -106,7 +115,7 @@ function computeState(input) {
     const weekdayIndex = (new Date(today * DAY).getUTCDay() + 6) % 7;
     const monday = today - weekdayIndex;
     const weekly = makeup.filter(date => Date.parse(date) / DAY >= monday && Date.parse(date) / DAY < monday + 7);
-    const own = ownDays(settings, today, year);
+    const own = ownDays(settings, today, year, Number(input.today.slice(5, 7)));
     const days = [...holidays.filter(day => day.end >= today), ...own].sort((left, right) => left.date - right.date);
     days.forEach((day, index) => { day.pinAction = "pin-" + index; });
     const nearest = days.find(day => day.current) || days.find(day => day.date >= today)
@@ -162,7 +171,7 @@ function dateColumn(day) {
     if (day.since) return day.dateLabel.split("-").join(".") + " 起";
     return [
         day.dateLabel.slice(5).replace("-", "."),
-        day.length ? "放假 " + day.length + " 天" : day.yearly ? "每年" : ""
+        day.length ? "放假 " + day.length + " 天" : day.monthly ? "每月" : day.yearly ? "每年" : ""
     ].filter(Boolean).join(" · ");
 }
 

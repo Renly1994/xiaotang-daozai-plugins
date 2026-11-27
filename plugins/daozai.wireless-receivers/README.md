@@ -52,6 +52,66 @@
 
 以上仅补充接收器识别，不增加电量或充电状态读取；Windows 真机待复测。
 
+## 1.0.3 补充的接收器
+
+本批仅匹配 Windows 枚举到的 USB 接收器，不读取电量，不区分共用接收器后的具体设备。外部项目资料只用于核对 VID/PID 和连接模式，未移植协议或程序。
+
+### 反馈及交叉核实
+
+| USB VID:PID | 接收器与证据 |
+| --- | --- |
+| `0C45:FEFE` | Sonix 2.4G 键盘接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7181336570) |
+| `0B05:1AD3` | ROG Cetra True Wireless SpeedNova 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7181440744) |
+| `320F:5112` | IQUNIX 2.4G 键盘接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7184892849) |
+| `369B:0114` | 雷神 ML903mini 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7184892849) |
+| `0E6A:0110` | iKF-V11 Pro 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7184892849) |
+| `35D8:0133` | 水月雨 GM01 Pro 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7183795138) |
+| `3554:FB4F` | IPI 奇 Pro 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai-plugins/issues/45) |
+| `0B05:1ACE` | ROG Omni 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7186395578) |
+| `0B05:1AD0` | ROG SpeedNova 8K 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7186395578) |
+| `0B05:1AFA` | ROG Delta II 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7186395578) |
+| `320F:7063` | HECATE G4M PRO 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7185793735) |
+| `3151:4011` | 3151:4011 2.4G 键盘接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7185793735)， [交叉核实](https://github.com/dniminenn/sharkfin/blob/master/docs/PROTOCOL.md) |
+| `35BB:A009` | HECATE G2 Wireless 7.1 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7185793735) |
+| `1532:00CD` | 雷蛇 Basilisk V3 Pro 35K 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7188281354)， [交叉核实](https://github.com/openrazer/openrazer/issues/2335) |
+| `3554:FA09` | 狼蛛 F87 系列 2.4G 键盘接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7189178633)， [交叉核实](https://github.com/leetrat/aula-f87-rgb)。该用户贴的是有线 ID；此处为独立证实的系列接收器 ID，用户所用接收器仍待核实。 |
+| `3837:6011` | 迈从 V9 Pro 2 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7189643389) |
+| `372E:1026` | 前行者 S9 Pro 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7189178633)， [交叉核实](https://github.com/wushuai0802/myfinder-device-battery/blob/main/docs/compatibility.md)。仅此接收器 ID，不涵盖其他 S9 版本。 |
+| `248A:FF30` | 达摩鲨 M3 2.4G 接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7191797692)， [交叉核实](https://github.com/ferloom/Wireless-Device-Battery-Monitor)。按外部实测 ID 纳入，反馈者具体版本待核实；不含 M3S 或有线。 |
+| `1A2C:7FFF` | Semico 2.4G 键盘接收器，[来源](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7185050673)， [交叉核实](https://github.com/ferloom/Wireless-Device-Battery-Monitor/issues/136)。共享 ID，不按 AULA S99 等具体型号显示。 |
+| `248D:5B5F` | XC TECH 2.4G 无线接收器，[SC580SE 反馈](https://github.com/Renly1994/xiaotang-daozai/issues/267#issuecomment-7185050673)，[独立 USB 枚举记录](https://gist.github.com/kissunyeason/ae225724b420451464f2522030e92c57#file-diagnostics-json-L98-L104)。仅按通用接收器显示，不推断具体鼠标型号。 |
+
+### 外部项目收录
+
+| USB VID:PID | 接收器与证据 |
+| --- | --- |
+| `3329:4B19` | Audeze Maxwell 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L15-L19) |
+| `0ECB:2088` | JBL Quantum 910 Wireless 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L85-L89) |
+| `046D:0AF7` | Logitech G PRO X 2 LIGHTSPEED 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L91-L95) |
+| `1532:053A` | Razer Barracuda Pro 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L108-L112) |
+| `373E:001E` | LAMZU Maya X 8K 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L260-L264) |
+| `2023:F013` | MCHOSE A5 Pro Max 1K 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L266-L270) |
+| `258A:2022` | Glorious Model O Wireless 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L332-L338) |
+| `1532:0296` | Razer DeathStalker V2 Pro TKL 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L445-L449) |
+| `3367:1961` | Endgame Gear XM2we 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/devices.md#L9) |
+| `1B1C:0A6B` | Corsair HS80 RGB Wireless 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L27-L29) |
+| `1B1C:0A3E` | Corsair Virtuoso SE 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L36-L41) |
+| `1B1C:0A40` | Corsair Slipstream 通用接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L36-L41) |
+| `1B1C:1B7F` | Corsair Dark Core RGB Pro SE 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L217-L221) |
+| `03F0:08BE` | HyperX Cloud Alpha 2 无线基站，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L55-L59) |
+| `03F0:0995` | HyperX Cloud II Core Wireless 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L61-L65) |
+| `03F0:02CC` | HyperX Cloud III S Wireless 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L73-L77) |
+| `03F0:06BE` | HyperX Cloud III S Wireless 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L73-L77) |
+| `1532:0528` | 雷蛇 BlackShark V2 Pro 2020 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L114-L142) |
+| `1532:0555` | 雷蛇 BlackShark V2 Pro 2023 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L114-L142) |
+| `1038:22A1` | SteelSeries Arctis Nova 7 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L156-L166) |
+| `1038:2244` | SteelSeries Arctis Nova Elite 无线基站，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L156-L166) |
+| `5253:1020` | 迈从 M7 Ultra 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L284-L288) |
+| `1532:00BF` | 雷蛇 DeathAdder V4 Pro 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L320-L324) |
+| `3057:2001` | VAXEE 4K 通用接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L354-L358) |
+| `3554:F505` | VGN Dragonfly 4K 通用接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L290-L297) |
+| `36A7:A880` | WLmouse Beast X Max 8K 2.4G 接收器，[来源](https://github.com/HeyOkay/HaloBattery/blob/15a73ac4d88435a771b0060b28171733a43dab06/docs/protocols.md#L366-L370) |
+
 ## 真机复测与反馈
 
 兼容包上线后，在岛仔中更新并启用，拔插一次接收器，再看「无线设备」页。重点复测狼途 M8 Max 的 `A8A5:2255`，以及 ATK A9 Ultra Max 2.0 所配接收器是否为 `373B:11FE`。

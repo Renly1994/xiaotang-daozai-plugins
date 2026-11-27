@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "provider": "deepseek",
+      "name": "DeepSeek",
+      "user": "demo-deepseek",
+      "windows": [],
+      "balance": "¥66.30",
+      "sharedBalance": "demo-deepseek",
+      "kind": "balance"
+    },
+    {
+      "provider": "deepseek",
+      "name": "DeepSeek",
+      "user": "api.deepseek.com",
+      "windows": [],
+      "balance": "¥66.30",
+      "sharedBalance": "demo-deepseek",
+      "kind": "balance"
+    }
+  ],
+  "object": "list"
+}
