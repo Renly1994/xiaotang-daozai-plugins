@@ -1,0 +1,313 @@
+{
+  "id": "zhongzhuojun.service",
+  "name": "服务器监视",
+  "titleAccent": "监视",
+  "author": "zhongzhuojun",
+  "version": "1.2.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "island.pinned",
+    "action",
+    "settings",
+    "storage",
+    "timer"
+  ],
+  "dataVersion": 1,
+  "permissions": {
+    "source.read": "loopback"
+  },
+  "refreshSeconds": 60,
+  "settings": [
+    {
+      "key": "view_cpu",
+      "label": "CPU 使用率",
+      "type": "choice",
+      "default": "both",
+      "choices": [
+        {
+          "value": "page",
+          "label": "仅展开"
+        },
+        {
+          "value": "pin",
+          "label": "仅常驻"
+        },
+        {
+          "value": "both",
+          "label": "两处显示"
+        },
+        {
+          "value": "off",
+          "label": "隐藏"
+        }
+      ]
+    },
+    {
+      "key": "view_gpu",
+      "label": "GPU 使用率",
+      "type": "choice",
+      "default": "page",
+      "choices": [
+        {
+          "value": "page",
+          "label": "仅展开"
+        },
+        {
+          "value": "pin",
+          "label": "仅常驻"
+        },
+        {
+          "value": "both",
+          "label": "两处显示"
+        },
+        {
+          "value": "off",
+          "label": "隐藏"
+        }
+      ]
+    },
+    {
+      "key": "view_memory",
+      "label": "内存",
+      "type": "choice",
+      "default": "both",
+      "choices": [
+        {
+          "value": "page",
+          "label": "仅展开"
+        },
+        {
+          "value": "pin",
+          "label": "仅常驻"
+        },
+        {
+          "value": "both",
+          "label": "两处显示"
+        },
+        {
+          "value": "off",
+          "label": "隐藏"
+        }
+      ]
+    },
+    {
+      "key": "view_vram",
+      "label": "显存 / 统一内存",
+      "type": "choice",
+      "default": "page",
+      "choices": [
+        {
+          "value": "page",
+          "label": "仅展开"
+        },
+        {
+          "value": "pin",
+          "label": "仅常驻"
+        },
+        {
+          "value": "both",
+          "label": "两处显示"
+        },
+        {
+          "value": "off",
+          "label": "隐藏"
+        }
+      ]
+    },
+    {
+      "key": "view_cputemp",
+      "label": "CPU 温度",
+      "type": "choice",
+      "default": "page",
+      "choices": [
+        {
+          "value": "page",
+          "label": "仅展开"
+        },
+        {
+          "value": "pin",
+          "label": "仅常驻"
+        },
+        {
+          "value": "both",
+          "label": "两处显示"
+        },
+        {
+          "value": "off",
+          "label": "隐藏"
+        }
+      ]
+    },
+    {
+      "key": "view_gputemp",
+      "label": "GPU 温度",
+      "type": "choice",
+      "default": "page",
+      "choices": [
+        {
+          "value": "page",
+          "label": "仅展开"
+        },
+        {
+          "value": "pin",
+          "label": "仅常驻"
+        },
+        {
+          "value": "both",
+          "label": "两处显示"
+        },
+        {
+          "value": "off",
+          "label": "隐藏"
+        }
+      ]
+    },
+    {
+      "key": "view_disk",
+      "label": "系统盘",
+      "type": "choice",
+      "default": "page",
+      "choices": [
+        {
+          "value": "page",
+          "label": "仅展开"
+        },
+        {
+          "value": "pin",
+          "label": "仅常驻"
+        },
+        {
+          "value": "both",
+          "label": "两处显示"
+        },
+        {
+          "value": "off",
+          "label": "隐藏"
+        }
+      ]
+    },
+    {
+      "key": "view_down",
+      "label": "下载",
+      "type": "choice",
+      "default": "page",
+      "choices": [
+        {
+          "value": "page",
+          "label": "仅展开"
+        },
+        {
+          "value": "pin",
+          "label": "仅常驻"
+        },
+        {
+          "value": "both",
+          "label": "两处显示"
+        },
+        {
+          "value": "off",
+          "label": "隐藏"
+        }
+      ]
+    },
+    {
+      "key": "view_up",
+      "label": "上传",
+      "type": "choice",
+      "default": "page",
+      "choices": [
+        {
+          "value": "page",
+          "label": "仅展开"
+        },
+        {
+          "value": "pin",
+          "label": "仅常驻"
+        },
+        {
+          "value": "both",
+          "label": "两处显示"
+        },
+        {
+          "value": "off",
+          "label": "隐藏"
+        }
+      ]
+    },
+    {
+      "key": "showranks",
+      "label": "展开页显示进程排行",
+      "type": "switch",
+      "default": "true"
+    },
+    {
+      "key": "host1",
+      "label": "第 1 台 SSH 地址",
+      "type": "text",
+      "default": "未设置"
+    },
+    {
+      "key": "name1",
+      "label": "第 1 台设备昵称",
+      "type": "text",
+      "default": "跟随 SSH 名称"
+    },
+    {
+      "key": "host2",
+      "label": "第 2 台 SSH 地址",
+      "type": "text",
+      "default": "未设置"
+    },
+    {
+      "key": "name2",
+      "label": "第 2 台设备昵称",
+      "type": "text",
+      "default": "跟随 SSH 名称"
+    },
+    {
+      "key": "host3",
+      "label": "第 3 台 SSH 地址",
+      "type": "text",
+      "default": "未设置"
+    },
+    {
+      "key": "name3",
+      "label": "第 3 台设备昵称",
+      "type": "text",
+      "default": "跟随 SSH 名称"
+    },
+    {
+      "key": "host4",
+      "label": "第 4 台 SSH 地址",
+      "type": "text",
+      "default": "未设置"
+    },
+    {
+      "key": "name4",
+      "label": "第 4 台设备昵称",
+      "type": "text",
+      "default": "跟随 SSH 名称"
+    }
+  ],
+  "navigationIcon": {
+    "path": "M3 4H21V12H3Z M3 14H21V21H3Z M6 8H8 M6 17H8 M13 8H18 M13 17H18",
+    "background": "#187D80"
+  },
+  "statusLayout": {
+    "components": [
+      {
+        "type": "canvas"
+      }
+    ],
+    "style": {
+      "accent": "#54CFC5",
+      "surface": "plain"
+    }
+  }
+}
