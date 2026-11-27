@@ -1,0 +1,35 @@
+{
+  "id": "workbuddy.merit-fish",
+  "name": "功德木鱼",
+  "titleAccent": "木鱼",
+  "author": "hoyo",
+  "version": "1.3.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": ["status.page", "status.canvas", "action", "storage", "settings", "timer"],
+  "dataVersion": 1,
+  "permissions": {},
+  "refreshSeconds": 120,
+  "settings": [
+    { "key": "title", "label": "功德名称", "type": "text", "default": "功德" },
+    { "key": "step", "label": "每次敲击功德", "type": "number", "default": "1", "min": 1, "max": 1000, "step": 1, "unit": "下" },
+    { "key": "combo", "label": "每档需要连续多少下", "type": "number", "default": "20", "min": 2, "max": 999, "step": 1, "unit": "下" },
+    { "key": "gap_sec", "label": "连击间隔上限（超过则回到 1 倍）", "type": "number", "default": "1", "min": 1, "max": 120, "step": 1, "unit": "秒" },
+    { "key": "idle_min", "label": "停手多久开始扣功德", "type": "number", "default": "30", "min": 1, "max": 1440, "step": 1, "unit": "分钟" },
+    { "key": "penalty_min", "label": "超时后每多久扣一次", "type": "number", "default": "2", "min": 1, "max": 240, "step": 1, "unit": "分钟" },
+    { "key": "penalty_step", "label": "每次扣多少功德", "type": "number", "default": "1", "min": 1, "max": 1000, "step": 1, "unit": "下" },
+    { "key": "active_start", "label": "扣功德生效时段·开始", "type": "time", "default": "08:00" },
+    { "key": "active_end", "label": "扣功德生效时段·结束", "type": "time", "default": "19:00" }
+  ],
+  "statusLayout": {
+    "components": [{ "type": "canvas" }, { "type": "actions" }],
+    "style": { "accent": "#FFD25A", "density": "compact", "surface": "plain", "emphasis": "normal" }
+  },
+  "navigationIcon": {
+    "path": "M3 13 C4.5 9.5 9 8 13 9.5 C15 10.2 16.5 11.5 17 13 C16.5 14.5 15 15.8 13 16.5 C9 18 4.5 16.5 3 13 Z M17 13 L21 9 L20 13 L21 17 Z M7 12 L7 12.6",
+    "background": "#B87A3E"
+  }
+}
