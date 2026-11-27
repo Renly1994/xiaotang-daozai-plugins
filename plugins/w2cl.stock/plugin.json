@@ -1,0 +1,137 @@
+{
+  "id": "w2cl.stock",
+  "name": "自选股",
+  "titleAccent": "选股",
+  "author": "w2cl",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "action",
+    "notice",
+    "storage",
+    "island.pinned",
+    "settings",
+    "timer"
+  ],
+  "dataVersion": 1,
+  "permissions": {
+    "source.read": "https"
+  },
+  "refreshSeconds": 60,
+  "network": {
+    "hosts": ["qt.gtimg.cn", "ifzq.gtimg.cn", "web.ifzq.gtimg.cn", "gu.qq.com"],
+    "sources": [
+      {
+        "key": "quotes",
+        "url": "https://qt.gtimg.cn/utf8/q=sh000001,{settings.a},{settings.b}"
+      },
+      {
+        "key": "a",
+        "url": "https://ifzq.gtimg.cn/appstock/app/kline/mkline?param={settings.a},m5,,320"
+      },
+      {
+        "key": "b",
+        "url": "https://ifzq.gtimg.cn/appstock/app/kline/mkline?param={settings.b},m5,,320"
+      }
+    ],
+    "minRefreshSeconds": 60
+  },
+  "attribution": {
+    "label": "腾讯行情"
+  },
+  "navigationIcon": {
+    "path": "M4 18 H20 M5 14 L9 10 L13 13 L19 6",
+    "background": "#E24B4B"
+  },
+  "settings": [
+    {
+      "key": "title",
+      "label": "组合名称",
+      "type": "text",
+      "default": "自选"
+    },
+    {
+      "key": "a",
+      "label": "自选1（小写带前缀，点列表即切换）",
+      "type": "text",
+      "default": "sh600519"
+    },
+    {
+      "key": "b",
+      "label": "自选2（小写带前缀，点列表即切换）",
+      "type": "text",
+      "default": "sz000001"
+    },
+    {
+      "key": "up_color",
+      "label": "涨跌颜色",
+      "type": "choice",
+      "default": "red",
+      "choices": [
+        { "value": "red", "label": "红涨绿跌" },
+        { "value": "green", "label": "绿涨红跌" }
+      ]
+    },
+    {
+      "key": "alert_pct",
+      "label": "涨跌幅提醒（0 为关闭）",
+      "type": "number",
+      "default": "0",
+      "min": 0,
+      "max": 20,
+      "step": 0.1,
+      "precision": 1
+    },
+    {
+      "key": "alerts",
+      "label": "价格提醒",
+      "type": "list",
+      "default": "[]",
+      "maxItems": 8,
+      "item": [
+        {
+          "key": "code",
+          "label": "代码",
+          "type": "text",
+          "default": "sh600519"
+        },
+        {
+          "key": "name",
+          "label": "名称",
+          "type": "text",
+          "default": "贵州茅台"
+        },
+        {
+          "key": "price",
+          "label": "提醒价",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 1000000,
+          "step": 0.01,
+          "precision": 2
+        },
+        {
+          "key": "since",
+          "label": "生效日期",
+          "type": "date",
+          "default": "2026-01-01"
+        }
+      ]
+    }
+  ],
+  "statusLayout": {
+    "components": [{ "type": "canvas" }],
+    "style": {
+      "accent": "#E24B4B",
+      "icon": "chart",
+      "surface": "card"
+    }
+  }
+}
