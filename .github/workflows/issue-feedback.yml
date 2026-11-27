@@ -2,22 +2,29 @@ name: 插件反馈分流
 on:
   issues:
     types: [opened]
+  issue_comment:
+    types: [created]
 permissions:
   contents: read
   issues: write
-concurrency:
-  group: plugin-feedback-${{ github.event.issue.number }}
-  cancel-in-progress: false
 jobs:
-  notify:
-    name: 通知维护者
-    if: github.event.sender.type != 'Bot'
+  feedback:
+    name: 通知维护者或关闭反馈
+    if: >-
+      github.event.sender.type != 'Bot' &&
+      (github.event_name == 'issues' ||
+       (github.event_name == 'issue_comment' && !github.event.issue.pull_request &&
+        github.event.comment.body == '/close'))
+    concurrency:
+      group: plugin-feedback-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: refs/heads/main
           persist-credentials: false
-      - name: 按插件 ID 路由
+      - name: 按插件登记处理反馈
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/route_feedback.py

@@ -10,6 +10,8 @@
 
 从插件详情或「我的插件」打开「插件反馈」。普通问题单会按插件 ID 通知登记的维护者，安装和更新问题由仓库维护者跟进。上架前，由仓库维护者核对并在主分支的 `.github/plugin-maintainers.json` 登记作者或接手维护的 GitHub 账号。安全或隐私问题通过 GitHub 私密报告提交。[普通问题](https://github.com/Renly1994/xiaotang-daozai-plugins/issues) · [私密报告](https://github.com/Renly1994/xiaotang-daozai-plugins/security/advisories/new)
 
+处理完成后，登记维护者可在对应的插件反馈下单独评论 `/close`，机器人核对插件归属和 GitHub 账号后关闭问题单。旧反馈的正文须从未编辑，且机器人的原通知账号与当前登记一致。
+
 ## 版本发布
 
 审核并合并后，发布脚本核对插件已登记维护者，再用启用了插件作者命令的岛仔构建安装包。镜像仓须已初始化默认分支，Git 使用维护者现有的 Gitee 凭据。先发布到 `preview` 频道验收，正式上架使用 `stable` 频道。「官方」标识按同一审定提交中的 `.github/official-plugins.json` 登记。
