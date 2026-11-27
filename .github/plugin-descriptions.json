@@ -10,5 +10,6 @@
   "hawkings.footballscoreboard": "在「状态」页查看关注球队的实时比分和下一场比赛。",
   "luongthimydieu.magpie-quota": "在 AI 额度面板和状态详情页查看本机 magpie 中各账号的剩余额度：按平台汇总、圆环占比、近 15 天用量柱状图。只读 magpie 的本机缓存，不读凭据、不触发上游刷新。使用前需在「授权数据源」填写完整地址 http://127.0.0.1:3425/v1/magpie/quotas/cards（旧版 magpie 用 .../v1/magpie/quotas?kept=1）。",
   "sunwenjun131483.stock-tracker": "在状态页查看自选股的现价、涨跌额与幅度，并按成本价和持股数量计算浮动盈亏；岛上常驻条跟随显示第一只股票。",
-  "workbuddy.merit-fish": "在状态页敲击木鱼累积功德，连击可升至两倍和四倍。"
+  "workbuddy.merit-fish": "在状态页敲击木鱼累积功德，连击可升至两倍和四倍。",
+  "wwrog.rog-battery": "在状态页查看 ROG OMNI 2.4G 键鼠的电量和充电状态。使用前按插件仓 README 启动本机桥接，再到插件详情授权 http://127.0.0.1:17358/。"
 }
