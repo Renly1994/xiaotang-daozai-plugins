@@ -1,13 +1,16 @@
 // 比特币现价 · 岛仔独立状态页插件
-// 数据来源：币安公开行情镜像 BTCUSDT K 线（美元/USDT 计价），人民币按腾讯汇率折算。
+// 数据来源：币安公开行情镜像 BTCUSDT K 线，原始报价为 USDT 计价；
+// 人民币按腾讯 USDCNY 汇率折算（USDT≈USD），页面与常驻位均标注为估算。
 // 每次刷新从头运行，需要记住的选中项与上次价格放在返回的 storage 里。
 
 const HOUR = 3600;
 const DAY = 24 * HOUR;
+// 汇率缓存有效期：腾讯汇率取不到时，缓存汇率最多再用 2 天，过期视为无汇率。
+const FX_TTL = 2 * DAY;
 const RANGES = { day: ["24小时", DAY], week: ["7日", 7 * DAY], month: ["30日", 30 * DAY] };
 const UNITS = {
-    usd: { symbol: "$", short: "USD" },
-    cny: { symbol: "¥", short: "CNY" }
+    usd: { short: "USDT" },
+    cny: { short: "CNY" }
 };
 const ACCENT = "#F7931A";
 const FADE = { ms: 240, ease: "linear" };
@@ -21,10 +24,19 @@ function readKline(source) {
         return [];
     }
     // 币安 klines：[[开盘ms, 开, 高, 低, 收, ...], ...]，最后一根是进行中的 K 线。
+    // 高低字段留给区间高低展示，走势仍用收盘价。
     if (!Array.isArray(data)) return [];
     return data
-        .map(row => Array.isArray(row) ? { at: row[0] / 1000, price: Number(row[4]) } : null)
+        .map(row => Array.isArray(row) ? {
+            at: row[0] / 1000, price: Number(row[4]),
+            high: Number(row[2]), low: Number(row[3])
+        } : null)
         .filter(p => p && Number.isFinite(p.at) && Number.isFinite(p.price) && p.price > 0)
+        .map(p => ({
+            ...p,
+            high: Number.isFinite(p.high) && p.high > 0 ? p.high : p.price,
+            low: Number.isFinite(p.low) && p.low > 0 ? p.low : p.price
+        }))
         .sort((a, b) => a.at - b.at);
 }
 
@@ -62,7 +74,15 @@ function digits(value, precision = 1) {
 }
 
 function money(unit, price) {
-    return UNITS[unit].symbol + digits(price, price >= 1000 ? 0 : 1);
+    const amount = digits(price, price >= 1000 ? 0 : 1);
+    // 原始报价是 USDT，直接标 USDT；人民币是折算值，用 ≈ 提示为估算。
+    return unit === "cny" ? "≈¥" + amount : amount + " USDT";
+}
+
+function bigMoney(unit, price) {
+    // 大字号价格不拼 USDT 后缀（拼上会被截成 U...），币种由左上角切换条高亮标明。
+    return unit === "cny" ? "≈¥" + digits(price, price >= 1000 ? 0 : 1)
+        : digits(price, price >= 1000 ? 0 : 1);
 }
 
 function signedPercent(value) {
@@ -90,32 +110,44 @@ function computeState(input) {
     const range = selection.range.value;
 
     const fx = readFx(sources?.fx, at);
-    // 汇率来源缺失或过期时退回上次记住的汇率，仅提示不再精确。
-    const rate = fx ? fx.rate : (Number.isFinite(storage?.lastRate) && storage.lastRate > 0 ? storage.lastRate : null);
+    // 汇率来源缺失或过期时退回缓存汇率，缓存本身也有有效期，过期当没有处理。
+    const cachedRate = Number.isFinite(storage?.lastRate) && storage.lastRate > 0
+        && Number.isFinite(storage?.lastRateAt) && at - storage.lastRateAt < FX_TTL
+        ? storage.lastRate : null;
+    const rate = fx ? fx.rate : cachedRate;
     const fxStale = unit === "cny" && !fx;
-    // CNY 且连上次记住的汇率都没有时，降级按美元展示，避免整卡空白。
+    // CNY 且连有效期内的缓存汇率都没有时，降级按 USDT 展示，避免整卡空白。
     const displayUnit = unit === "cny" && !rate ? "usd" : unit;
 
     const intraday = readKline(sources?.intraday);
     const daily = readKline(sources?.daily);
     // 7日 = 日线最后 7 根，30日 = 全部 30 根，24小时 = 15min 线（滞后不超过 15 分钟）。
     const series = range === "day" ? intraday : range === "week" ? daily.slice(-7) : daily;
+    // 新鲜度按最后一根 K 线的收盘时刻（开盘时间 + 周期）判断：
+    // 15min 线容忍 2 个周期（约 30 分钟），日线容忍 1 个周期（最后一根距今 2 天以上算旧行情）。
+    const period = range === "day" ? 15 * 60 : DAY;
+    const tolerance = range === "day" ? 2 * period : period;
+    const newest = series.length ? series[series.length - 1] : null;
+    const quoteAt = newest ? newest.at + period : 0;
+    const stale = Boolean(newest) && at - quoteAt >= tolerance;
     let quote = null;
+    let rawQuote = null;
     let points = [];
+    let rawPoints = [];
     let low = 0;
     let high = 0;
     let change = 0;
     if (series.length >= 2) {
-        if (displayUnit === "cny") {
-            if (rate) points = series.map(p => ({ at: p.at, price: p.price * rate }));
-        } else {
-            points = series;
-        }
+        rawPoints = series.map(p => ({ at: p.at, price: p.price }));
+        points = displayUnit === "cny" && rate
+            ? series.map(p => ({ at: p.at, price: p.price * rate, high: p.high * rate, low: p.low * rate }))
+            : series;
         if (points.length >= 2) {
             quote = points[points.length - 1];
-            const prices = points.map(p => p.price);
-            low = Math.min(...prices);
-            high = Math.max(...prices);
+            rawQuote = rawPoints[rawPoints.length - 1];
+            // 区间高低取 K 线的最高/最低字段，而不是只比收盘价。
+            high = Math.max(...points.map(p => p.high));
+            low = Math.min(...points.map(p => p.low));
             change = (quote.price - points[0].price) / points[0].price * 100;
         }
     }
@@ -135,10 +167,12 @@ function computeState(input) {
     const falling = settings.up_color === "green" ? "#FF6B6B" : "#58D791";
     return {
         unit, displayUnit, range, offset, at, quote, points, low, high, change, sinceLast, fxStale,
+        stale, quoteAt, rawQuote, rawPoints,
         deltaColor: change > 0 ? rising : change < 0 ? falling : "$muted",
         storage: {
             selection,
             lastRate: rate ?? storage?.lastRate,
+            lastRateAt: fx ? fx.at : storage?.lastRateAt,
             last: quote ? { ...storage?.last, [combo]: { price: quote.price, at } } : storage?.last
         }
     };
@@ -229,7 +263,7 @@ function chart(state) {
 }
 
 function toCanvas(state) {
-    const { unit, displayUnit, range, quote, low, high, change, sinceLast, fxStale } = state;
+    const { unit, displayUnit, range, quote, low, high, change, sinceLast, fxStale, stale, quoteAt } = state;
     const nodes = [];
     toggleBar(nodes, Object.entries(UNITS).map(([key, value]) => [key, value.short]), unit, 0, 126, "unit");
     toggleBar(nodes, Object.entries(RANGES).map(([key, value]) => [key, value[0]]), range, 263, 124, "range");
@@ -245,7 +279,9 @@ function toCanvas(state) {
         return { height: 196, nodes };
     }
     const deltaColor = state.deltaColor;
-    const price = text(money(displayUnit, quote.price), 0, 61, 30, {
+    // 数字位数多时（如 CNY 的 ≈¥ + 6 位数）自动缩小字号，避免被 max_width 截断。
+    const bigPrice = bigMoney(displayUnit, quote.price);
+    const price = text(bigPrice, 0, 61, bigPrice.length >= 9 ? 24 : 30, {
         id: "price-" + displayUnit + "-" + range, animate: FADE, weight: 800, max_width: 138, fill: "$text"
     });
     nodes.push(price, { rect: [0, 70, 110, 22], r: 7,
@@ -258,9 +294,12 @@ function toCanvas(state) {
         const diff = (sinceLast > 0 ? "↑" : "↓") + digits(magnitude, magnitude >= 1000 ? 0 : 1);
         nodes.push(text("较上次 " + diff, 122, 85.5, 9.5, { fill: "$muted", max_width: 120 }));
     }
-    if (fxStale) {
-        nodes.push(text(displayUnit === "cny" ? "汇率待更新，价格仅供参考" : "汇率待更新，已按美元显示",
+    // 币种口径提示：CNY 是 USDT≈USD 折算的估算值；汇率失效时说明数据来源。
+    if (displayUnit === "cny") {
+        nodes.push(text(fxStale ? "汇率待更新，按缓存汇率估算" : "人民币为汇率折算，估算值",
             0, 108, 9.5, { fill: "$accent" }));
+    } else if (fxStale) {
+        nodes.push(text("汇率待更新，已按 USDT 显示", 0, 108, 9.5, { fill: "$accent" }));
     }
     const rows = [
         ["区间高", money(displayUnit, high)],
@@ -274,22 +313,30 @@ function toCanvas(state) {
         );
     });
     nodes.push(chart(state),
-        text("更新 " + timeLabel(state.at, state.offset), 387, 191, 9.5, { align: "right", fill: "$dim" }));
+        text(stale ? "旧行情 · " + timeLabel(quoteAt, state.offset, range)
+            : "更新 " + timeLabel(state.at, state.offset), 387, 191, 9.5,
+            { align: "right", fill: stale ? "$accent" : "$dim" }));
     return { height: 196, nodes };
 }
 
 function toPinned(state) {
-    const { quote, points, change, displayUnit } = state;
-    if (!quote) return null;
-    const price = money(displayUnit, quote.price);
+    const { quote, points, rawQuote, rawPoints, displayUnit, fxStale, stale } = state;
+    // 旧行情不进常驻位，避免把旧价当最新展示。
+    if (!quote || stale) return null;
+    // 汇率失效时退回 USDT 原价，常驻位不展示按旧汇率折算的人民币。
+    const fallback = fxStale && displayUnit === "cny";
+    const pinnedUnit = fallback ? "usd" : displayUnit;
+    const pinnedQuote = fallback ? rawQuote : quote;
+    const pinnedPoints = fallback ? rawPoints : points;
+    const price = money(pinnedUnit, pinnedQuote.price);
     const priceLeft = 18;
     const priceWidth = Math.min(96, 2 + [...price].reduce((width, char) =>
         width + (char === "." || char === "," ? 4 : 7), 0));
     const priceRight = priceLeft + priceWidth;
     // 常驻小曲线覆盖整个所选区间：在全长上等距采样约 8 个点，再补上最新点。
-    const step = Math.max(1, Math.floor((points.length - 1) / 7));
-    const tail = points.filter((_, index) => index % step === 0);
-    const newest = points[points.length - 1];
+    const step = Math.max(1, Math.floor((pinnedPoints.length - 1) / 7));
+    const tail = pinnedPoints.filter((_, index) => index % step === 0);
+    const newest = pinnedPoints[pinnedPoints.length - 1];
     if (tail[tail.length - 1] !== newest) tail.push(newest);
     const hasTrend = tail.length > 1;
     const nodes = [
@@ -313,11 +360,11 @@ function toPinned(state) {
 function refresh(input) {
     const state = computeState(input);
     const quote = state.quote;
-    // K 线时间戳是开盘时间（日线是当天 00:00）， freshness 用本次取数时刻表示，
-    // 否则 observed_at 落后太多，宿主会立刻显示「状态已过期」。
+    // K 线时间戳是开盘时间（日线是当天 00:00）， observed_at 用本次取数时刻表示，
+    // 否则宿主会立刻显示「状态已过期」；数据本身的陈旧由 stale 标注在页面与常驻位。
     const at = Math.floor(input.now / 1000);
     const status = quote
-        ? { state: "succeeded", label: "现货比特币", observed_at: at, expires_at: at + 30 * 60 }
+        ? { state: "succeeded", label: state.stale ? "现货比特币（旧行情）" : "现货比特币", observed_at: at, expires_at: at + 30 * 60 }
         : { state: "offline", label: "行情数据暂不可用" };
     return {
         status, canvas: toCanvas(state), pinned: toPinned(state),
@@ -328,3 +375,4 @@ function refresh(input) {
 function action(input) {
     return refresh(input);
 }
+

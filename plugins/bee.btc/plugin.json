@@ -62,8 +62,8 @@
       "type": "choice",
       "default": "usd",
       "choices": [
-        { "value": "usd", "label": "美元" },
-        { "value": "cny", "label": "人民币" }
+        { "value": "usd", "label": "USDT" },
+        { "value": "cny", "label": "人民币（估算）" }
       ]
     },
     {
