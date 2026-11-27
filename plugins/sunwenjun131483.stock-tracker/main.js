@@ -6,8 +6,23 @@ const ROW_H = 48;
 const LIST_TOP = 10;
 
 function num(value) {
-    const n = Number(value);
+    if (value === null || value === undefined) return NaN;
+    const s = String(value).trim();
+    if (s === "") return NaN;
+    const n = Number(s);
     return Number.isFinite(n) ? n : NaN;
+}
+
+// 宿主设置项以字符串下发；关闭态可能是 "false" / "0" / "off" 等，不能只认 "off"。
+function flagOn(value) {
+    const s = String(value ?? "").trim().toLowerCase();
+    return !["false", "0", "off", "no", "否", "关闭"].includes(s);
+}
+
+// 腾讯时间戳 yyyyMMddHHmmss 取 HH:mm；无法解析时返回空串。
+function stampTime(stamp) {
+    if (typeof stamp !== "string" || stamp.length < 12) return "";
+    return `${stamp.slice(8, 10)}:${stamp.slice(10, 12)}`;
 }
 
 function visible(text, max) {
@@ -61,7 +76,9 @@ function pickSlot(settings, storage, sources, index) {
 
     const cost = num(settings[`cost${index}`]);
     const shares = num(settings[`shares${index}`]);
-    const quote = parseQuote(sources?.[`s${index}`], code) ?? storage?.quotes?.[code] ?? null;
+    const live = parseQuote(sources?.[`s${index}`], code);
+    const cached = live ? null : storage?.quotes?.[code] ?? null;
+    const quote = live ?? cached;
     if (!quote) return { code, missing: true };
 
     const costValid = Number.isFinite(cost) && cost > 0;
@@ -69,7 +86,7 @@ function pickSlot(settings, storage, sources, index) {
     const profit = costValid && sharesValid ? (quote.price - cost) * shares : null;
     return {
         code,
-        quote,
+        quote: { ...quote, stale: !live },
         cost: costValid ? cost : 0,
         shares: sharesValid ? shares : 0,
         profit
@@ -138,13 +155,15 @@ function toCanvas(items, settings) {
     ready.forEach((item, i) => {
         const y = LIST_TOP + i * ROW_H;
         const q = item.quote;
-        const color = sideColor(q, colors);
+        const color = q.stale ? "$muted" : sideColor(q, colors);
+        const stamp = stampTime(q.stamp);
+        const subLine = q.stale ? (stamp ? `上次报价 ${stamp}` : "上次报价") : q.code.toUpperCase();
 
         nodes.push({ rect: [0, y, 387, ROW_H - 5], r: 10, fill: "$card" });
         nodes.push(text(visible(q.name, 8), 12, y + 13, 12, {
             weight: 700, fill: "$text", max_width: 110
         }));
-        nodes.push(text(q.code.toUpperCase(), 12, y + 28, 9, { fill: "$dim", max_width: 110 }));
+        nodes.push(text(subLine, 12, y + 28, 9, { fill: "$dim", max_width: 150 }));
 
         nodes.push(text(q.price.toFixed(2), 375, y + 14, 15, {
             align: "right", weight: 700, fill: color, max_width: 120
@@ -157,7 +176,7 @@ function toCanvas(items, settings) {
             nodes.push(text(`成本 ${item.cost.toFixed(2)} · ${item.shares} 股`, 12, y + 39, 9, {
                 fill: "$dim", max_width: 180
             }));
-            if (settings.show_profit !== "off") {
+            if (flagOn(settings.show_profit)) {
                 const profitColor = item.profit >= 0 ? colors.up : colors.down;
                 nodes.push(text(`盈亏 ${sign(item.profit)}${fmtMoney(item.profit)}`, 375, y + 39, 9, {
                     align: "right", fill: profitColor, max_width: 170
@@ -186,6 +205,7 @@ function toPinned(first, settings) {
     const name = visible(q.name, 6);
     const price = q.price.toFixed(2);
     const percent = `${sign(q.percent)}${q.percent.toFixed(2)}%`;
+    const color = q.stale ? "$muted" : sideColor(q, colors);
 
     let x = 0;
     const nameWidth = textWidth(name, 11);
@@ -196,13 +216,13 @@ function toPinned(first, settings) {
 
     const priceWidth = textWidth(price, 11.5);
     nodes.push(text(price, x, 15, 11.5, {
-        fill: sideColor(q, colors), weight: 700, max_width: priceWidth
+        fill: color, weight: 700, max_width: priceWidth
     }));
     x += priceWidth + 8;
 
     const percentWidth = textWidth(percent, 10);
     nodes.push(text(percent, x, 15, 10, {
-        fill: sideColor(q, colors), max_width: percentWidth
+        fill: color, max_width: percentWidth
     }));
     const width = x + percentWidth + 4;
 
@@ -217,7 +237,10 @@ function refresh(input) {
     const items = buildItems(settings, storage, sources);
     const quotes = {};
     for (const item of items) {
-        if (item.quote) quotes[item.code] = item.quote;
+        if (item.quote) {
+            const { stale, ...saved } = item.quote;
+            quotes[item.code] = saved;
+        }
     }
 
     const readyCount = items.filter(item => item.quote).length;
