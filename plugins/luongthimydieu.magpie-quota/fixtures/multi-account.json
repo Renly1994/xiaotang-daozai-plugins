@@ -1,0 +1,89 @@
+{
+  "data": [
+    {
+      "provider": "copilot",
+      "name": "Copilot",
+      "user": "luongthimydieu",
+      "windows": [
+        {"name": "Premium requests", "used": 3.25, "resetsAt": "2026-12-01T00:00:00Z", "display": "6.5 / 200"}
+      ],
+      "kind": "subscription"
+    },
+    {
+      "provider": "workbuddy",
+      "name": "WorkBuddy",
+      "user": "jinnn",
+      "windows": [
+        {"name": "Credits", "used": 100, "limit": 500, "amount": 500, "unit": "credits"},
+        {"name": "Extra credits", "used": 21.615263129473686, "limit": 1900, "amount": 410.69, "unit": "credits"},
+        {"name": "Total credits", "used": 37.94541664416667, "limit": 2400, "amount": 910.69, "unit": "credits"}
+      ],
+      "daily": {"since": "2026-11-08", "window": "Credits", "days": [
+        {"day": "2026-11-20", "used": 79.23},
+        {"day": "2026-11-21", "used": 55.87},
+        {"day": "2026-11-22", "used": 29.5},
+        {"day": "2026-11-23", "used": 3.14},
+        {"day": "2026-11-24", "used": 14.49},
+        {"day": "2026-11-25", "used": 55.65},
+        {"day": "2026-11-26", "used": 122.28}
+      ]},
+      "kind": "subscription"
+    },
+    {
+      "provider": "workbuddy",
+      "name": "WorkBuddy",
+      "user": "jinnn (87qapa)",
+      "windows": [
+        {"name": "Credits", "used": 6.402, "limit": 500, "amount": 32.01, "unit": "credits"},
+        {"name": "Extra credits", "used": 0, "limit": 2500, "amount": 0, "unit": "credits"},
+        {"name": "Total credits", "used": 1.067, "limit": 3000, "amount": 32.01, "unit": "credits"}
+      ],
+      "daily": {"since": "2026-11-17", "window": "Credits", "days": [
+        {"day": "2026-11-20", "used": 32.01}
+      ]},
+      "kind": "subscription"
+    },
+    {
+      "provider": "workbuddy",
+      "name": "WorkBuddy",
+      "user": "今",
+      "windows": [
+        {"name": "Credits", "used": 45.10199997, "limit": 500, "amount": 225.51, "unit": "credits"},
+        {"name": "Extra credits", "used": 0, "limit": 2500, "amount": 0, "unit": "credits"},
+        {"name": "Total credits", "used": 7.516999995000001, "limit": 3000, "amount": 225.51, "unit": "credits"}
+      ],
+      "daily": {"since": "2026-11-17", "window": "Credits", "days": [
+        {"day": "2026-11-20", "used": 225.51}
+      ]},
+      "kind": "subscription"
+    },
+    {
+      "provider": "zcode",
+      "name": "ZCode",
+      "user": "ZCode",
+      "windows": [],
+      "error": "当前用户不存在coding plan",
+      "pluginError": true,
+      "kind": "subscription"
+    },
+    {
+      "provider": "kimi",
+      "name": "Kimi Code",
+      "windows": [
+        {"name": "5 hours", "used": 63.66, "resetsAt": "2026-11-26T15:21:03Z"},
+        {"name": "Month", "used": 44.63, "resetsAt": "2026-12-24T00:00:00Z"}
+      ],
+      "kind": "plan"
+    },
+    {
+      "provider": "deepseek",
+      "name": "DeepSeek",
+      "user": "demo-deepseek",
+      "windows": [],
+      "balance": "¥66.30",
+      "sharedBalance": "demo-deepseek",
+      "kind": "balance"
+    }
+  ],
+  "object": "list"
+}

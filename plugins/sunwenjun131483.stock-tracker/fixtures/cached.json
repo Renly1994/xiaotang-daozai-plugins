@@ -1,0 +1,36 @@
+{
+  "now": 1795703400000,
+  "settings": {
+    "code1": "sh600519",
+    "code2": "",
+    "code3": "",
+    "cost1": "1600",
+    "cost2": "0",
+    "cost3": "0",
+    "shares1": "100",
+    "shares2": "0",
+    "shares3": "0",
+    "up_color": "red",
+    "show_profit": "true"
+  },
+  "sources": {
+    "s1": { "status": "offline" },
+    "s2": { "status": "offline" },
+    "s3": { "status": "offline" }
+  },
+  "storage": {
+    "quotes": {
+      "sh600519": {
+        "code": "sh600519",
+        "name": "贵州茅台",
+        "price": 1688.00,
+        "prevClose": 1675.00,
+        "change": 13.00,
+        "percent": 0.78,
+        "high": 1700.00,
+        "low": 1660.00,
+        "stamp": "20261127153000"
+      }
+    }
+  }
+}

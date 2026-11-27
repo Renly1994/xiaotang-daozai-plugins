@@ -1,0 +1,145 @@
+{
+  "id": "sunwenjun131483.stock-tracker",
+  "name": "自选股盯盘",
+  "titleAccent": "盯盘",
+  "author": "Sun",
+  "version": "1.0.1",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "action",
+    "settings",
+    "timer",
+    "storage",
+    "island.pinned"
+  ],
+  "dataVersion": 1,
+  "permissions": {
+    "source.read": "https"
+  },
+  "refreshSeconds": 60,
+  "network": {
+    "hosts": [
+      "qt.gtimg.cn"
+    ],
+    "sources": [
+      { "key": "s1", "url": "https://qt.gtimg.cn/utf8/q={settings.code1}" },
+      { "key": "s2", "url": "https://qt.gtimg.cn/utf8/q={settings.code2}" },
+      { "key": "s3", "url": "https://qt.gtimg.cn/utf8/q={settings.code3}" }
+    ],
+    "minRefreshSeconds": 60
+  },
+  "attribution": {
+    "label": "腾讯行情"
+  },
+  "settings": [
+    {
+      "key": "code1",
+      "label": "股票代码 1（如 sh600519）",
+      "type": "text",
+      "default": "输入股票代码"
+    },
+    {
+      "key": "code2",
+      "label": "股票代码 2（留空则不盯）",
+      "type": "text",
+      "default": "输入股票代码"
+    },
+    {
+      "key": "code3",
+      "label": "股票代码 3（留空则不盯）",
+      "type": "text",
+      "default": "输入股票代码"
+    },
+    {
+      "key": "cost1",
+      "label": "第 1 只成本价（0 为不计算盈亏）",
+      "type": "number",
+      "default": "0",
+      "min": 0,
+      "max": 1000000,
+      "step": 0.01,
+      "precision": 2
+    },
+    {
+      "key": "cost2",
+      "label": "第 2 只成本价（0 为不计算盈亏）",
+      "type": "number",
+      "default": "0",
+      "min": 0,
+      "max": 1000000,
+      "step": 0.01,
+      "precision": 2
+    },
+    {
+      "key": "cost3",
+      "label": "第 3 只成本价（0 为不计算盈亏）",
+      "type": "number",
+      "default": "0",
+      "min": 0,
+      "max": 1000000,
+      "step": 0.01,
+      "precision": 2
+    },
+    {
+      "key": "shares1",
+      "label": "第 1 只持股数量（0 为不计算盈亏）",
+      "type": "number",
+      "default": "0",
+      "min": 0,
+      "max": 1000000,
+      "step": 1,
+      "precision": 0
+    },
+    {
+      "key": "shares2",
+      "label": "第 2 只持股数量（0 为不计算盈亏）",
+      "type": "number",
+      "default": "0",
+      "min": 0,
+      "max": 1000000,
+      "step": 1,
+      "precision": 0
+    },
+    {
+      "key": "shares3",
+      "label": "第 3 只持股数量（0 为不计算盈亏）",
+      "type": "number",
+      "default": "0",
+      "min": 0,
+      "max": 1000000,
+      "step": 1,
+      "precision": 0
+    },
+    {
+      "key": "up_color",
+      "label": "涨跌颜色",
+      "type": "choice",
+      "default": "red",
+      "choices": [
+        { "value": "red", "label": "红涨绿跌" },
+        { "value": "green", "label": "绿涨红跌" }
+      ]
+    },
+    {
+      "key": "show_profit",
+      "label": "显示浮动盈亏",
+      "type": "switch",
+      "default": "true"
+    }
+  ],
+  "statusLayout": {
+    "components": [
+      { "type": "canvas" }
+    ],
+    "style": {
+      "accent": "#E8543F",
+      "icon": "chart"
+    }
+  }
+}

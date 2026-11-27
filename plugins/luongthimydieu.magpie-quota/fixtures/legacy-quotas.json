@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "provider": "copilot",
+      "name": "Copilot",
+      "plan": "Education",
+      "kind": "subscription",
+      "user": "demo-copilot",
+      "windows": [
+        {"name": "Premium requests", "used": 3.25, "remaining": 96.75, "resetsAt": "2026-12-01T00:00:00Z", "display": "6.5 / 200", "holdsWhy": "low"},
+        {"unlimited": true, "name": "Chat requests", "used": 0, "remaining": 100, "display": "Unlimited"},
+        {"unlimited": true, "name": "Completions", "used": 0, "remaining": 100, "display": "Unlimited"}
+      ],
+      "readAt": "2026-11-26T18:58:02.7582389+08:00"
+    },
+    {
+      "provider": "workbuddy",
+      "name": "WorkBuddy",
+      "user": "demo-workbuddy",
+      "windows": [
+        {"name": "Credits", "used": 100, "remaining": 0, "resetsAt": "2026-11-30T15:59:59Z", "display": "500 / 500", "amount": 500, "limit": 500, "unit": "credits"},
+        {"name": "Extra credits", "used": 21.23, "remaining": 78.76, "display": "403.43 / 1900", "amount": 403.43, "limit": 1900, "unit": "credits", "runsOutAt": "2026-12-12T00:57:14Z", "runsOut": 96.57},
+        {"name": "Total credits", "used": 37.64, "remaining": 62.36, "resetsAt": "2026-11-30T15:59:59Z", "display": "903.43 / 2400", "amount": 903.43, "limit": 2400, "unit": "credits", "runsOutAt": "2026-12-12T00:57:14Z", "runsOut": 96.57, "holdsWhy": "log"},
+        {"name": "demo tokens (est.)", "used": 5.59, "remaining": 94.41, "resetsAt": "2026-11-27T03:54:57.199Z", "display": "11.2M / ~200M", "amount": 11189113, "limit": 200000000}
+      ],
+      "readAt": "2026-11-26T18:58:03.0991725+08:00"
+    },
+    {
+      "provider": "deepseek",
+      "name": "DeepSeek",
+      "user": "demo-wallet",
+      "windows": [],
+      "balance": "¥12.50",
+      "kind": "balance",
+      "readAt": "2026-11-26T18:58:01.7136378+08:00"
+    }
+  ],
+  "object": "list"
+}
