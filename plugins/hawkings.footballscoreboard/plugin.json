@@ -1,0 +1,63 @@
+{
+  "id": "hawkings.footballscoreboard",
+  "name": "足球比分牌",
+  "titleAccent": "比分牌",
+  "author": "hawkings",
+  "version": "1.2.3",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "island.pinned",
+    "settings",
+    "storage",
+    "timer",
+    "action",
+    "notice"
+  ],
+  "dataVersion": 1,
+  "permissions": {
+    "source.read": "https"
+  },
+  "refreshSeconds": 60,
+  "network": {
+    "hosts": [
+      "site.api.espn.com"
+    ],
+    "sources": [
+      {
+        "key": "board",
+        "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?limit=50"
+      },
+      {
+        "key": "chn",
+        "url": "https://site.api.espn.com/apis/site/v2/sports/soccer/chn.1/scoreboard?limit=20"
+      }
+    ],
+    "minRefreshSeconds": 60
+  },
+  "settings": [
+    {
+      "key": "date",
+      "label": "看板日期（留作预览；下一场自动从当前时间往后算）",
+      "type": "date",
+      "default": "2026-11-27"
+    }
+  ],
+  "statusLayout": {
+    "components": [
+      {
+        "type": "canvas"
+      }
+    ],
+    "style": {
+      "accent": "#35D07F",
+      "icon": "chart",
+      "surface": "plain"
+    }
+  }
+}
