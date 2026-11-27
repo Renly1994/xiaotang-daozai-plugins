@@ -1,0 +1,154 @@
+{
+  "id": "mixicecream.prism-wave",
+  "name": "虹彩光浪",
+  "author": "iceGC（@mixicecream）",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "material",
+  "entry": "material.wgsl",
+  "cover": "cover.png",
+  "owner": "appearance",
+  "capabilities": [
+    "appearance.material",
+    "settings"
+  ],
+  "dataVersion": 1,
+  "permissions": {
+    "screen.backdrop": true
+  },
+  "material": {
+    "controls": true,
+    "spring": {
+      "stiffness": 1.15,
+      "damping": 0.44
+    },
+    "shadow": 1.15,
+    "foreground": "skin"
+  },
+  "settings": [
+    {
+      "key": "obsidian",
+      "label": "黑透分界位置",
+      "type": "number",
+      "min": 0.1,
+      "max": 0.95,
+      "step": 0.01,
+      "default": "0.80",
+      "precision": 2
+    },
+    {
+      "key": "refract",
+      "label": "水滴折射",
+      "type": "number",
+      "min": 0,
+      "max": 120,
+      "step": 1,
+      "default": "56",
+      "unit": "px",
+      "precision": 0
+    },
+    {
+      "key": "lens",
+      "label": "凸镜放大",
+      "type": "number",
+      "min": 0,
+      "max": 1.5,
+      "step": 0.05,
+      "default": "0.65",
+      "precision": 2
+    },
+    {
+      "key": "chroma",
+      "label": "色散",
+      "type": "number",
+      "min": 0,
+      "max": 30,
+      "step": 1,
+      "default": "10",
+      "unit": "px",
+      "precision": 0
+    },
+    {
+      "key": "glow",
+      "label": "弧光亮度",
+      "type": "number",
+      "min": 0,
+      "max": 2,
+      "step": 0.05,
+      "default": "0.85",
+      "precision": 2
+    },
+    {
+      "key": "iridescence",
+      "label": "流光彩度",
+      "type": "number",
+      "min": 0,
+      "max": 1.5,
+      "step": 0.05,
+      "default": "0.90",
+      "precision": 2
+    },
+    {
+      "key": "wave-speed",
+      "label": "动态流速",
+      "type": "number",
+      "min": 0,
+      "max": 3,
+      "step": 0.05,
+      "default": "1.20",
+      "precision": 2
+    },
+    {
+      "key": "ripple",
+      "label": "液态波动",
+      "type": "number",
+      "min": 0,
+      "max": 2,
+      "step": 0.05,
+      "default": "0.90",
+      "precision": 2
+    },
+    {
+      "key": "blur",
+      "label": "内部模糊",
+      "type": "number",
+      "min": 0,
+      "max": 4,
+      "step": 0.1,
+      "default": "1.1",
+      "unit": "px",
+      "precision": 1
+    },
+    {
+      "key": "edge-width",
+      "label": "细边宽度",
+      "type": "number",
+      "min": 0,
+      "max": 4,
+      "step": 0.1,
+      "default": "1.0",
+      "unit": "px",
+      "precision": 1
+    },
+    {
+      "key": "edge-opacity",
+      "label": "细边亮度",
+      "type": "number",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "default": "0.86",
+      "precision": 2
+    },
+    {
+      "key": "morph",
+      "label": "形变弹性",
+      "type": "number",
+      "min": 0,
+      "max": 3,
+      "step": 0.01,
+      "default": "1.20",
+      "precision": 2
+    }
+  ]
+}
