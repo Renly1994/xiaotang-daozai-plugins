@@ -5,12 +5,14 @@ import route_feedback
 
 
 REPOSITORY = "org/repo"
-ISSUE = f"/repos/{REPOSITORY}/issues/42"
+ISSUES = f"/repos/{REPOSITORY}/issues"
+ISSUE = f"{ISSUES}/42"
 COMMENTS = f"{ISSUE}/comments"
 ALPHA = "example.alpha"
 BETA = "example.beta"
 MAINTAINERS = {ALPHA: "Alice", BETA: "Bob"}
 HANDLED = "<!-- daozai-plugin-feedback -->"
+CLOSE_HELP = "<!-- daozai-feedback-close-help -->"
 NOTICE = "@Alice 有一条插件反馈，请查看本问题单。"
 CLOSED = {"state": "closed", "state_reason": "completed"}
 
@@ -33,14 +35,16 @@ def notification(*, plugin=ALPHA, login="github-actions[bot]", app="github-actio
     }
 
 
+def unedited_history(issue, **changes):
+    return {"data": {"node": {
+        "body": issue["body"], "lastEditedAt": None, "userContentEdits": {"totalCount": 0},
+        **changes,
+    }}}
+
+
 class RouteFeedbackTests(unittest.TestCase):
-    def run_event(self, *, issue=None, current=None, author="Alice", kind="User", action="created",
-                  body="/close", comment_pages=None, edit_history=None, maintainers=MAINTAINERS,
-                  sender=None):
-        issue = feedback() if issue is None else issue
-        event = {"action": action, "issue": issue, "sender": {"login": sender or author, "type": kind}}
-        if action != "opened":
-            event["comment"] = {"body": body, "user": {"login": author, "type": kind}}
+    def run_with_api(self, run, *, issue, current=None, comment_pages=None, issue_pages=None,
+                     edit_history=None):
         writes = []
         reads = []
 
@@ -59,11 +63,34 @@ class RouteFeedbackTests(unittest.TestCase):
                 return issue if current is None else current
             if path.startswith(f"{COMMENTS}?per_page=100&page="):
                 return (comment_pages or {}).get(int(path.split("=")[-1]), [])
+            if path.startswith(f"{ISSUES}?state=open&per_page=100&page="):
+                return (issue_pages or {}).get(int(path.split("=")[-1]), [])
             self.fail(f"非预期请求：{path}")
 
         with patch.object(route_feedback, "api", side_effect=api):
-            route_feedback.handle_event(event, REPOSITORY, maintainers, "test-token")
+            run()
         return writes, reads
+
+    def run_event(self, *, issue=None, current=None, author="Alice", kind="User", action="created",
+                  body="/close", comment_pages=None, edit_history=None, maintainers=MAINTAINERS,
+                  sender=None):
+        issue = feedback() if issue is None else issue
+        event = {"action": action, "issue": issue, "sender": {"login": sender or author, "type": kind}}
+        if action != "opened":
+            event["comment"] = {"body": body, "user": {"login": author, "type": kind}}
+        return self.run_with_api(
+            lambda: route_feedback.handle_event(event, REPOSITORY, maintainers, "test-token"),
+            issue=issue, current=current, comment_pages=comment_pages, edit_history=edit_history,
+        )
+
+    def run_backfill(self, *, issue=None, issue_pages=None, maintainers=MAINTAINERS, **options):
+        issue = feedback() if issue is None else issue
+        if issue_pages is None:
+            issue_pages = {1: [issue]}
+        return self.run_with_api(
+            lambda: route_feedback.backfill_close_help(REPOSITORY, maintainers, "test-token"),
+            issue=issue, issue_pages=issue_pages, **options,
+        )
 
     def test_opened_feedback_records_registered_plugin_and_explains_command(self):
         writes, _ = self.run_event(action="opened")
@@ -135,11 +162,8 @@ class RouteFeedbackTests(unittest.TestCase):
 
     def test_old_notification_with_verified_unedited_body_can_close(self):
         issue = feedback()
-        history = {"data": {"node": {
-            "body": issue["body"], "lastEditedAt": None, "userContentEdits": {"totalCount": 0},
-        }}}
         writes, reads = self.run_event(issue=issue, comment_pages={1: [notification(plugin=None)]},
-                                       edit_history=history)
+                                       edit_history=unedited_history(issue))
         self.assertIn("/graphql", reads)
         self.assertEqual(writes, [("PATCH", ISSUE, CLOSED)])
 
@@ -187,6 +211,66 @@ class RouteFeedbackTests(unittest.TestCase):
         for changes in cases:
             with self.subTest(changes=changes):
                 writes, _ = self.run_event(comment_pages={1: [notification()]}, **changes)
+                self.assertEqual(writes, [])
+
+    def test_backfill_sends_instructions_for_verified_legacy_feedback(self):
+        issue = feedback()
+        other_issues = [feedback(pull_request={})] * 100
+        fake_help = {**notification(login="Reporter", kind="User"), "body": CLOSE_HELP}
+        writes, reads = self.run_backfill(
+            issue=issue, issue_pages={1: other_issues, 2: [issue]},
+            comment_pages={1: [notification(plugin=None), fake_help]},
+            edit_history=unedited_history(issue),
+        )
+        self.assertEqual(len(writes), 1)
+        method, path, payload = writes[0]
+        self.assertEqual((method, path), ("POST", COMMENTS))
+        self.assertEqual(payload["body"].splitlines()[0], CLOSE_HELP)
+        self.assertIn("@Alice", payload["body"])
+        self.assertIn("/close", payload["body"])
+        self.assertIn(f"{ISSUES}?state=open&per_page=100&page=2", reads)
+        self.assertIn(ISSUE, reads)
+        self.assertIn("/graphql", reads)
+
+    def test_backfill_skips_existing_genuine_help_on_a_later_page(self):
+        help_comment = {**notification(), "body": f"{CLOSE_HELP}\n@Alice 请评论 /close。"}
+        ordinary = [{"body": "普通讨论", "user": {"login": "Reporter"}}] * 99
+        writes, _ = self.run_backfill(
+            comment_pages={1: [notification(plugin=None), *ordinary], 2: [help_comment]},
+            edit_history=unedited_history(feedback()),
+        )
+        self.assertEqual(writes, [])
+
+    def test_backfill_skips_new_or_untrusted_notifications(self):
+        current_help = {**notification(), "body": notification()["body"] + "\n可评论 /close。"}
+        for comment_pages in (
+            {1: [current_help]}, {1: [notification(plugin=None, app="different-app")]}, {},
+        ):
+            with self.subTest(comment_pages=comment_pages):
+                writes, _ = self.run_backfill(comment_pages=comment_pages)
+                self.assertEqual(writes, [])
+
+    def test_backfill_skips_nonfeedback_and_issues_closed_since_listing(self):
+        for changes in (
+            {"issue": feedback(state="closed")}, {"current": feedback(state="closed")},
+            {"issue": feedback(title="[安装与更新] 示例")}, {"issue": feedback(title="[安全或隐私] 示例")},
+            {"issue": feedback(body=f"插件 ID：{ALPHA}\n## 安全或隐私")},
+            {"issue": feedback("example.unregistered")}, {"issue": feedback(pull_request={})},
+        ):
+            with self.subTest(changes=changes):
+                writes, _ = self.run_backfill(comment_pages={1: [notification(plugin=None)]}, **changes)
+                self.assertEqual(writes, [])
+
+    def test_backfill_skips_edited_feedback_and_changed_maintainer(self):
+        issue = feedback()
+        for changes in (
+            {"edit_history": unedited_history(issue, lastEditedAt="2026-11-26T00:00:00Z")},
+            {"edit_history": unedited_history(issue, userContentEdits={"totalCount": 1})},
+            {"maintainers": {ALPHA: "NewMaintainer"}, "edit_history": unedited_history(issue)},
+        ):
+            with self.subTest(changes=changes):
+                writes, _ = self.run_backfill(issue=issue, comment_pages={1: [notification(plugin=None)]},
+                                               **changes)
                 self.assertEqual(writes, [])
 
 

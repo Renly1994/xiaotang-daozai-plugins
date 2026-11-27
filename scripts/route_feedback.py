@@ -11,7 +11,10 @@ ID_LINE = re.compile(r"^插件 ID[：:][ \t]*([a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]
 LOGIN = re.compile(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*")
 HANDLED = "<!-- daozai-plugin-feedback -->"
 BINDING = "<!-- daozai-feedback-plugin: {} -->"
+CLOSE_HELP = "<!-- daozai-feedback-close-help -->"
 CLOSE_COMMAND = "/close"
+NOTICE = "@{} 有一条插件反馈，请查看本问题单。"
+CLOSE_HINT = f"处理完成后，登记维护者可单独评论 `{CLOSE_COMMAND}` 关闭这条反馈。"
 
 
 def route(issue, maintainers, owner):
@@ -47,20 +50,34 @@ def api(path, token, data=None, *, method=None):
         return json.load(response)
 
 
-def routing_comment(path, token):
+def pages(path, token):
+    separator = "&" if "?" in path else "?"
     page = 1
     while True:
-        comments = api(f"{path}?per_page=100&page={page}", token)
-        for comment in comments:
-            user = comment.get("user") or {}
-            app = comment.get("performed_via_github_app") or {}
-            lines = (comment.get("body") or "").splitlines()
-            if (user.get("login") == "github-actions[bot]" and user.get("type") == "Bot"
-                    and app.get("slug") == "github-actions" and lines[:1] == [HANDLED]):
-                return lines
-        if len(comments) < 100:
-            return None
+        items = api(f"{path}{separator}per_page=100&page={page}", token)
+        yield from items
+        if len(items) < 100:
+            return
         page += 1
+
+
+def feedback_comments(path, token):
+    for comment in pages(path, token):
+        user = comment.get("user") or {}
+        app = comment.get("performed_via_github_app") or {}
+        lines = (comment.get("body") or "").splitlines()
+        if (user.get("login") == "github-actions[bot]" and user.get("type") == "Bot"
+                and app.get("slug") == "github-actions"
+                and lines and lines[0] in (HANDLED, CLOSE_HELP)):
+            yield lines
+
+
+def routing_comment(comments):
+    return next((lines for lines in comments if lines[0] == HANDLED), None)
+
+
+def legacy_notice(recorded, login):
+    return recorded is not None and len(recorded) == 2 and recorded[1].casefold() == NOTICE.format(login).casefold()
 
 
 def unedited_body(issue, token):
@@ -91,13 +108,12 @@ def handle_event(event, repository, maintainers, token):
 
     path = f"/repos/{repository}/issues/{int(issue['number'])}"
     comments_path = f"{path}/comments"
-    notice = f"@{login} 有一条插件反馈，请查看本问题单。"
     if action == "opened":
-        if routing_comment(comments_path, token) is None:
-            lines = [HANDLED, notice]
+        if routing_comment(feedback_comments(comments_path, token)) is None:
+            lines = [HANDLED, NOTICE.format(login)]
             if plugin:
                 lines.insert(1, BINDING.format(plugin))
-                lines.extend(["", f"处理完成后，登记维护者可单独评论 `{CLOSE_COMMAND}` 关闭这条反馈。"])
+                lines.extend(["", CLOSE_HINT])
             api(comments_path, token, {"body": "\n".join(lines)})
         return
 
@@ -106,23 +122,49 @@ def handle_event(event, repository, maintainers, token):
     if (not plugin or issue.get("state") != "open" or comment.get("body") != CLOSE_COMMAND
             or author.get("type") != "User" or (author.get("login") or "").casefold() != login.casefold()):
         return
-    recorded = routing_comment(comments_path, token)
+    recorded = routing_comment(feedback_comments(comments_path, token))
     if recorded is None:
         return
     current = api(path, token)
     if current.get("state") != "open" or route(current, maintainers, owner) != (plugin, login):
         return
     bound = recorded[1:2] == [BINDING.format(plugin)]
-    legacy = len(recorded) == 2 and recorded[1].casefold() == notice.casefold()
-    if bound or (legacy and unedited_body(current, token)):
+    if bound or (legacy_notice(recorded, login) and unedited_body(current, token)):
         api(path, token, {"state": "closed", "state_reason": "completed"}, method="PATCH")
 
 
+def backfill_close_help(repository, maintainers, token):
+    owner, _ = repository.split("/", 1)
+    issues_path = f"/repos/{repository}/issues"
+    sent = 0
+    for issue in pages(f"{issues_path}?state=open", token):
+        if issue.get("state") != "open" or "pull_request" in issue:
+            continue
+        plugin, login = route(issue, maintainers, owner)
+        if not plugin:
+            continue
+        path = f"{issues_path}/{int(issue['number'])}"
+        comments_path = f"{path}/comments"
+        comments = list(feedback_comments(comments_path, token))
+        if any(lines[0] == CLOSE_HELP for lines in comments) or not legacy_notice(routing_comment(comments), login):
+            continue
+        current = api(path, token)
+        if (current.get("state") == "open" and route(current, maintainers, owner) == (plugin, login)
+                and unedited_body(current, token)):
+            api(comments_path, token, {"body": f"{CLOSE_HELP}\n@{login} {CLOSE_HINT}"})
+            sent += 1
+    return sent
+
+
 def main():
-    event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
     repository = os.environ["GITHUB_REPOSITORY"]
     maintainers = json.loads((ROOT / ".github/plugin-maintainers.json").read_text(encoding="utf-8"))
     token = os.environ["GITHUB_TOKEN"]
+    if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+        sent = backfill_close_help(repository, maintainers, token)
+        print(f"已为 {sent} 条旧反馈补发关闭说明。")
+        return
+    event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
     handle_event(event, repository, maintainers, token)
 
 

@@ -10,7 +10,7 @@
 
 从插件详情或「我的插件」打开「插件反馈」。普通问题单会按插件 ID 通知登记的维护者，安装和更新问题由仓库维护者跟进。上架前，由仓库维护者核对并在主分支的 `.github/plugin-maintainers.json` 登记作者或接手维护的 GitHub 账号。安全或隐私问题通过 GitHub 私密报告提交。[普通问题](https://github.com/Renly1994/xiaotang-daozai-plugins/issues) · [私密报告](https://github.com/Renly1994/xiaotang-daozai-plugins/security/advisories/new)
 
-处理完成后，登记维护者可在对应的插件反馈下单独评论 `/close`，机器人核对插件归属和 GitHub 账号后关闭问题单。旧反馈的正文须从未编辑，且机器人的原通知账号与当前登记一致。
+处理完成后，登记维护者可在对应的插件反馈下单独评论 `/close`，机器人核对插件归属和 GitHub 账号后关闭问题单。旧反馈的正文须从未编辑，且机器人的原通知账号与当前登记一致。仓库负责人可以手动运行「插件反馈分流」，为符合条件的未关闭旧反馈补发一次操作说明。
 
 ## 版本发布
 
