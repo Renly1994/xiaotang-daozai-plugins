@@ -1,0 +1,175 @@
+{
+  "id": "resin.leetcode-flashcards",
+  "name": "力扣速记卡",
+  "titleAccent": "速记卡",
+  "author": "Resin",
+  "version": "0.1.23",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "action",
+    "event",
+    "notice",
+    "storage",
+    "status.canvas",
+    "island.pinned",
+    "settings"
+  ],
+  "events": [
+    "focus.finished"
+  ],
+  "dataVersion": 1,
+  "permissions": {},
+  "network": {
+    "hosts": [
+      "leetcode.cn",
+      "leetcode.com"
+    ]
+  },
+  "data": [
+    "questions.json"
+  ],
+  "statusLayout": {
+    "components": [
+      {
+        "type": "canvas"
+      }
+    ],
+    "canvasFields": [
+      {
+        "key": "f1",
+        "rect": [
+          24,
+          64,
+          339,
+          30
+        ],
+        "action": "next-step"
+      },
+      {
+        "key": "f2",
+        "rect": [
+          24,
+          122,
+          339,
+          56
+        ],
+        "action": "next-step"
+      },
+      {
+        "key": "note",
+        "rect": [
+          24,
+          48,
+          168,
+          184
+        ],
+        "action": "commit"
+      }
+    ],
+    "style": {
+      "accent": "#5B9BFF",
+      "surface": "plain"
+    }
+  },
+  "settings": [
+    {
+      "key": "default_tab",
+      "label": "默认打开题库",
+      "type": "choice",
+      "default": "hot",
+      "choices": [
+        {
+          "value": "hot",
+          "label": "Hot 100"
+        },
+        {
+          "value": "custom",
+          "label": "自选题"
+        }
+      ]
+    },
+    {
+      "key": "default_language",
+      "label": "默认代码语言",
+      "type": "choice",
+      "default": "python",
+      "choices": [
+        {
+          "value": "python",
+          "label": "Python"
+        },
+        {
+          "value": "cpp",
+          "label": "C++"
+        },
+        {
+          "value": "java",
+          "label": "Java"
+        },
+        {
+          "value": "javascript",
+          "label": "JavaScript"
+        },
+        {
+          "value": "go",
+          "label": "Go"
+        },
+        {
+          "value": "rust",
+          "label": "Rust"
+        }
+      ]
+    },
+    {
+      "key": "open_note_first",
+      "label": "切题优先展开我的思路",
+      "type": "switch",
+      "default": "false"
+    },
+    {
+      "key": "pinned_mode",
+      "label": "岛上常驻显示",
+      "type": "choice",
+      "default": "current",
+      "choices": [
+        {
+          "value": "current",
+          "label": "当前题目"
+        },
+        {
+          "value": "idea",
+          "label": "题目 + 思路摘要"
+        },
+        {
+          "value": "progress",
+          "label": "刷题进度统计"
+        },
+        {
+          "value": "rotate",
+          "label": "已记思路轮播"
+        },
+        {
+          "value": "off",
+          "label": "关闭常驻"
+        }
+      ]
+    },
+    {
+      "key": "pinned_show_status",
+      "label": "常驻显示思路状态圆点",
+      "type": "switch",
+      "default": "true"
+    },
+    {
+      "key": "focus_push",
+      "label": "番茄专注结束推送一题",
+      "type": "switch",
+      "default": "true"
+    }
+  ]
+}
