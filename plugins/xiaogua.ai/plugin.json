@@ -1,8 +1,8 @@
 {
   "id": "xiaogua.ai",
-  "name": "小米mimo额度",
+  "name": "Xiaomi MiMo额度",
   "author": "W.g",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "api": 1,
   "runtime": "js",
   "refreshSeconds": 600,
@@ -24,7 +24,8 @@
   },
   "network": {
     "hosts": [
-      "api.xiaomimimo.com"
+      "api.xiaomimimo.com",
+      "platform.xiaomimimo.com"
     ],
     "sources": [
       {
@@ -41,7 +42,7 @@
   },
   "attribution": {
     "label": "小米 MiMo",
-    "url": "https://api.xiaomimimo.com/"
+    "url": "https://platform.xiaomimimo.com/console"
   },
   "settings": [
     {
