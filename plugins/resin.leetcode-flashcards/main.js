@@ -407,13 +407,14 @@ function sidebar(nodes, state, context) {
 }
 
 function boundedNode(node) {
-    const key = node.at ? "at" : node.rect ? "rect" : "circle";
-    const coordinates = node[key];
-    if (!coordinates || coordinates[1] <= 1500) return node;
-    const position = [...coordinates];
-    const segments = Math.floor(position[1] / 1500);
-    position[1] -= segments * 1500;
-    let group = {...node, [key]: position};
+    const key = node.at ? "at" : node.rect ? "rect" : node.circle ? "circle" : null;
+    if (!key) return node;
+    const y = node[key][1];
+    if (y <= 1500) return node;
+    const segments = Math.floor(y / 1500);
+    const coords = [...node[key]];
+    coords[1] = y - segments * 1500;
+    let group = {...node, [key]: coords};
     for (let index = 0; index < segments; index++) {
         group = {translate: [0, 1500], group: [group]};
     }
@@ -468,10 +469,15 @@ function questionBody(nodes, question, index, mode, hasNote, isCustom, confirmDe
         );
     }
     let y = BODY_TOP + 29;
-    if (isCustom && confirmDelete && hasNote) {
-        y = paragraph(content, "删除后保留思路，重新导入同一道题可恢复。", CONTENT_X, y, CONTENT_W, {
-            size: 9.5, lineHeight: 13, fill: COLOR.muted
-        }) + 5;
+    if (isCustom && confirmDelete) {
+        const tipText = hasNote
+            ? "删除后将保留已有思路，再次导入同题可自动恢复"
+            : "确认移除该自选题？（若已写思路将保留）";
+        content.push(
+            {rect: [CONTENT_X, y - 8, CONTENT_W, 20], r: 5, fill: "#F59E0B18", stroke: "#F59E0B45", width: 1},
+            label(tipText, CONTENT_X + 7, y + 5, {size: 9, weight: 600, fill: "#F59E0B", max_width: CONTENT_W - 14, lines: 1})
+        );
+        y += 22;
     }
     const reqText = question.description ?? question.prompt ?? "";
     if (reqText) {

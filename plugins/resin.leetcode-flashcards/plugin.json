@@ -3,7 +3,7 @@
   "name": "力扣速记卡",
   "titleAccent": "速记卡",
   "author": "Resin",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
