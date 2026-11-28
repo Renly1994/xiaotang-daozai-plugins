@@ -407,13 +407,13 @@ function sidebar(nodes, state, context) {
 }
 
 function boundedNode(node) {
-    const key = node.at ? "at" : "rect";
-    const y = node[key][1];
-    if (y <= 1500) return node;
-    const segments = Math.floor(y / 1500);
-    const rect = [...node[key]];
-    rect[1] = y - segments * 1500;
-    let group = {...node, [key]: rect};
+    const key = node.at ? "at" : node.rect ? "rect" : "circle";
+    const coordinates = node[key];
+    if (!coordinates || coordinates[1] <= 1500) return node;
+    const position = [...coordinates];
+    const segments = Math.floor(position[1] / 1500);
+    position[1] -= segments * 1500;
+    let group = {...node, [key]: position};
     for (let index = 0; index < segments; index++) {
         group = {translate: [0, 1500], group: [group]};
     }
@@ -468,6 +468,11 @@ function questionBody(nodes, question, index, mode, hasNote, isCustom, confirmDe
         );
     }
     let y = BODY_TOP + 29;
+    if (isCustom && confirmDelete && hasNote) {
+        y = paragraph(content, "删除后保留思路，重新导入同一道题可恢复。", CONTENT_X, y, CONTENT_W, {
+            size: 9.5, lineHeight: 13, fill: COLOR.muted
+        }) + 5;
+    }
     const reqText = question.description ?? question.prompt ?? "";
     if (reqText) {
         content.push(label("要求：", CONTENT_X, y, {size: 10, weight: 700, fill: COLOR.text}));
