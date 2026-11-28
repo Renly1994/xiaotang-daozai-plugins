@@ -3,7 +3,7 @@
 ## 环境
 
 - 岛仔 v0.6.71（Windows x64，含 `sdk-js`）
-- 数据源：拓竹打印监控 v1.0.0 + 只读状态桥 `bambu_monitor/bridge.py`（`source.read: "loopback"`）
+- 数据源：拓竹打印监控 **v1.0.1**（内置只读状态桥 `/status`，`source.read: "loopback"`）
 - 打印机：A1 mini（本机经云端连接）
 - 授权地址：`http://127.0.0.1:39778/status`
 
@@ -15,7 +15,9 @@ $island = '<你的目录>\daozai.exe'
 $LASTEXITCODE   # 0
 ```
 
-`--plugin-test` 默认以 `unconfigured` 试跑：返回授权引导，退出码 0，`refresh` 用时约 14 ms（限时 30 ms）。
+`--plugin-test` 默认以 `unconfigured` 试跑：返回授权引导，退出码 0，`refresh` 用时约 15 ms（限时 30 ms）。
+
+> 监控版本要求：**v1.0.1 起**才有 `/status` 状态桥（v1.0.0 没有，会在授权那一步失败）。
 
 ## 用例矩阵
 

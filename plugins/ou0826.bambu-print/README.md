@@ -11,31 +11,58 @@
 | 部分 | 要求 |
 | --- | --- |
 | 岛仔 | v0.6.70 或更新（带「设置 → 插件」） |
-| 数据源 | 「拓竹打印监控」[ou0826/bambu-monitor](https://github.com/ou0826/bambu-monitor)，含只读状态桥 `bambu_monitor/bridge.py` |
+| 数据源 | [拓竹打印监控](https://github.com/ou0826/bambu-monitor/releases/latest) **v1.0.1 或更新** |
+
+> ⚠️ **必须是 v1.0.1 及以上**。v1.0.0 的下载包里没有本插件依赖的只读状态桥 `/status`，装 v1.0.0 会在「授权数据源」这一步卡住。
+
+下载：**[`BambuMonitor-v1.0.1.zip`](https://github.com/ou0826/bambu-monitor/releases/download/v1.0.1/BambuMonitor-v1.0.1.zip)**（20 MB，解压即用，不用装 Python）
+· [发布说明](https://github.com/ou0826/bambu-monitor/releases/tag/v1.0.1) · [全部版本](https://github.com/ou0826/bambu-monitor/releases)
 
 ## 安装
 
-1. 启动「拓竹打印监控」，确认它已经连上打印机（局域网或云端都行）。
-2. 岛仔 →「设置 → 插件 → 已安装 → 开发者工具 → 安装本地插件…」，选择本目录的 `plugin.json`。
-3. 回到「已安装」打开插件开关，并在插件的**授权数据源**里填写：
+1. 下载并解压拓竹打印监控 v1.0.1，双击 `拓竹打印监控.exe`，按它自己的引导连上打印机（局域网或云端都行）。
+2. 确认状态桥在跑（默认开启）：
+
+   ```powershell
+   curl http://127.0.0.1:39778/status
+   ```
+
+   返回一段以 `{"api": 1, ...` 开头的 JSON 就说明桥正常。
+
+3. 岛仔 →「设置 → 插件 → 已安装 → 开发者工具 → 安装本地插件…」，选择本目录的 `plugin.json`。
+4. 回到「已安装」打开插件开关，在插件详情的**授权数据源**里填写：
 
    ```
    http://127.0.0.1:39778/status
    ```
 
-4. 打开岛上的状态详情页（也可在「设置 → 页面管理 → 状态详情」里控制开关）。
+5. 打开岛上的状态详情页（也可在「设置 → 页面管理 → 状态详情」里控制开关）。
 
 监测页只在授权后才读取；撤销授权或停用插件会立即停止读取。
 
-## 授权地址与端口
+## 状态桥怎么开、怎么关、端口怎么查
 
-状态桥默认监听 `127.0.0.1:39778`。端口被占用时监控会往后顺延（最多 8 个），实际端口写在：
+桥是监控程序的一部分，**默认开启**：
+
+- 只监听 `127.0.0.1`，只有 `GET /status` 和 `GET /health`，没有写接口，也不向外部网络发送数据。
+- **关闭**：退出监控程序即停止；或编辑 `%APPDATA%\BambuMonitor\config.json`，把 `app.bridge` 改成 `false` 后重启监控。
+- **改端口**：同一个文件里改 `app.bridge_port`（默认 `39778`）。
+
+### 端口被占用时怎么确认实际地址
+
+桥默认用 `39778`。如果这个端口被别的程序占用，监控会自动往后顺延（最多 8 个），并把**实际端口**写进：
 
 ```
 %APPDATA%\BambuMonitor\rt\bridge.json
 ```
 
-如果上面的默认地址读不到，打开这个文件确认端口，再改授权地址为 `http://127.0.0.1:<端口>/status`。
+打开这个文件看 `"port"` 的值，把授权地址改成 `http://127.0.0.1:<那个端口>/status`。PowerShell 一行：
+
+```powershell
+Get-Content "$env:APPDATA\BambuMonitor\rt\bridge.json"
+```
+
+排查顺序：① 托盘里监控是否还在运行 → ② 上面这个文件里的端口 → ③ `curl http://127.0.0.1:<端口>/status` 是否有 JSON。
 
 ## 读取了什么
 
