@@ -17,5 +17,6 @@
   "w2cl.stock": "在状态页查看上证指数和两只自选股的腾讯行情、分时和 K 线，并设置价格或涨跌幅提醒。",
   "workbuddy.merit-fish": "在状态页敲击木鱼累积功德，连击可升至两倍和四倍。",
   "wwrog.rog-battery": "在状态页查看 ROG OMNI 2.4G 键鼠的电量和充电状态。使用前按插件仓 README 启动本机桥接，再到插件详情授权 http://127.0.0.1:17358/。",
-  "xiaogua.ai": "在 AI 额度页和岛上查看小米 MiMo 的 API 余额，可切换总余额和可消费余额。使用前需授权小米 MiMo 余额 API Key。"
+  "xiaogua.ai": "在 AI 额度页和岛上查看小米 MiMo 的 API 余额，可切换总余额和可消费余额。使用前需授权小米 MiMo 余额 API Key。",
+  "zhongzhuojun.service": "在岛仔状态页查看 Linux 和 macOS 设备的性能。需在 Windows 端用 Node.js 启动配套采集器，并配置 OpenSSH。采集器仅监听本机，提供性能及进程读数。安装说明 https://github.com/Renly1994/xiaotang-daozai-plugins/blob/66873649813c959caa5f30da60af2f374d3036ff/plugins/zhongzhuojun.service/README.md"
 }
