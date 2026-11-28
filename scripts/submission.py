@@ -13,12 +13,14 @@ VERSION = re.compile(r"(?:0|[1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){2}")
 USB_ID = re.compile(r"[0-9a-fA-F]{4}")
 WIRELESS_ID = "daozai.wireless-receivers"
 WIRELESS_ENTRY = "wireless-receivers.json"
+MAIL_VIEW_ENTRY = "mail-view.json"
 MATERIAL_ENTRY = re.compile(r"[a-zA-Z0-9_-]+\.wgsl")
 MATERIAL_LIMIT = 64 * 1024
 PACKAGE_FILES = {
     "plugin.json": 32 * 1024,
     "main.js": 256 * 1024,
     "shortcuts.json": 4 * 1024,
+    MAIL_VIEW_ENTRY: 4 * 1024,
     WIRELESS_ENTRY: 256 * 1024,
     "cover.png": 256 * 1024,
 }
@@ -101,6 +103,66 @@ def check_wireless(payload, manifest):
         if pair in seen:
             raise ValueError("接收器识别表有重复的 VID/PID")
         seen.add(pair)
+
+
+def check_mail_view(raw, manifest):
+    if manifest.keys() - {
+        "id", "name", "author", "version", "api", "runtime", "entry", "cover", "owner",
+        "capabilities", "dataVersion", "permissions", "settings", "refreshSeconds",
+    }:
+        raise ValueError("邮箱视图包含不支持的清单字段")
+    refresh = manifest.get("refreshSeconds", 60)
+    if type(refresh) is not int or refresh != 60:
+        raise ValueError("邮箱视图 refreshSeconds 必须为默认的 60 秒")
+    capabilities = manifest.get("capabilities")
+    if capabilities not in (["mail.view"], ["mail.view", "settings"], ["settings", "mail.view"]):
+        raise ValueError("邮箱视图须声明 mail.view 能力，可选 settings 能力")
+    settings = manifest.get("settings")
+    if not isinstance(settings, list) or (settings and "settings" not in capabilities):
+        raise ValueError("邮箱视图有设置时须声明 settings 能力")
+
+    layout = load_json(raw, MAIL_VIEW_ENTRY)
+    if not isinstance(layout, dict) or layout.keys() - {"version", "showUnread", "startDateSetting", "aliasesSetting"}:
+        raise ValueError("邮箱视图入口包含不支持的字段")
+    if type(layout.get("version")) is not int or layout["version"] != 1:
+        raise ValueError("邮箱视图入口版本必须为 1")
+    if type(layout.get("showUnread")) is not bool:
+        raise ValueError("邮箱视图入口 showUnread 必须为布尔值")
+
+    fields = {}
+    for field in settings:
+        if (not isinstance(field, dict) or not isinstance(key := field.get("key"), str)
+                or not CONTROL_ID.fullmatch(key) or key in fields or not valid_status_text(field.get("label"))):
+            raise ValueError("邮箱视图设置的键和标签必须有效，且不能重复")
+        fields[key] = field
+
+    field_keys = {"key", "label", "type", "default"}
+    for name, kind in (("startDateSetting", "date"), ("aliasesSetting", "list")):
+        key = layout.get(name)
+        if key is None:
+            continue
+        field = fields.pop(key, None) if isinstance(key, str) else None
+        if field is None or field.get("type") != kind:
+            raise ValueError(f"邮箱视图入口 {name} 须引用已声明的 {kind} 设置")
+        if kind == "date":
+            if field.keys() != field_keys or field["default"] != "0001-01-01":
+                raise ValueError("邮箱视图起始日期默认必须为 0001-01-01（不限日期）")
+        else:
+            if field.keys() != field_keys | {"maxItems", "item"} or field["default"] != "[]":
+                raise ValueError("邮箱别名须使用默认空列表")
+            if type(field["maxItems"]) is not int or not 1 <= field["maxItems"] <= 20:
+                raise ValueError("邮箱别名 maxItems 必须为 1 至 20 的整数")
+            items = field["item"]
+            if (not isinstance(items, list) or len(items) != 2 or not all(
+                isinstance(item, dict) and field_keys <= item.keys() <= field_keys | {"multiline"}
+                and item["key"] in ("address", "alias") and item["type"] == "text"
+                and type(item.get("multiline", False)) is bool
+                and valid_status_text(item["label"]) and valid_status_text(item["default"])
+                for item in items
+            ) or {item["key"] for item in items} != {"address", "alias"}):
+                raise ValueError("邮箱别名须包含 address 和 alias 两个文本字段")
+    if fields:
+        raise ValueError("邮箱视图设置必须由入口引用")
 
 
 def valid_package_path(name):
@@ -448,6 +510,9 @@ def read_plugin(repo, commit, plugin_id):
         entry = WIRELESS_ENTRY
         required.update(runtime="assets", owner="wireless", entry=entry, dataVersion=1,
                         settings=[], capabilities=["wireless.receivers"])
+    elif manifest.get("runtime") == "assets" and manifest.get("owner") == "mail":
+        entry = MAIL_VIEW_ENTRY
+        required.update(runtime="assets", owner="mail", entry=entry, dataVersion=1)
     elif manifest.get("runtime") == "assets":
         entry = "shortcuts.json"
         required.update(runtime="assets", owner="pages", entry=entry, dataVersion=1,
@@ -476,6 +541,8 @@ def read_plugin(repo, commit, plugin_id):
         check_shortcuts(files[entry])
     elif entry == WIRELESS_ENTRY:
         check_wireless(files[entry], manifest)
+    elif entry == MAIL_VIEW_ENTRY:
+        check_mail_view(files[entry], manifest)
     elif is_material:
         check_material(manifest, files[entry])
     else:

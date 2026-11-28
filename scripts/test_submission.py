@@ -73,6 +73,72 @@ def test_status_plugin_accepts_current_capabilities_and_nested_assets(plugin, mo
     assert set(files) == {"plugin.json", "main.js", "cover.png", "日历.json", "icons/reference.svg", "picture.png"}
 
 
+def mail_manifest(**fields):
+    return {
+        "name": "邮箱（增强）", "version": "1.0.7", "runtime": "assets",
+        "owner": "mail", "entry": "mail-view.json", "dataVersion": 1,
+        "capabilities": ["mail.view", "settings"],
+        "settings": [
+            {"key": "start_date", "label": "起始日期", "type": "date", "default": "0001-01-01"},
+            {"key": "nicknames", "label": "邮箱别名", "type": "list", "default": "[]",
+             "maxItems": 20, "item": [
+                {"key": "address", "label": "邮箱地址", "type": "text", "default": "请输入邮箱"},
+                {"key": "alias", "label": "别名", "type": "text", "default": "请输入别名"},
+             ]},
+        ],
+        **fields,
+    }
+
+
+MAIL_VIEW = {"version": 1, "showUnread": True,
+             "startDateSetting": "start_date", "aliasesSetting": "nicknames"}
+
+
+@pytest.mark.parametrize("fields,layout", [
+    (mail_manifest(), MAIL_VIEW),
+    (mail_manifest(capabilities=["mail.view"], settings=[]), {"version": 1, "showUnread": False}),
+])
+def test_mail_view_admits_code_free_package(plugin, monkeypatch, tmp_path, fields, layout):
+    monkeypatch.setattr(submission, "ROOT", tmp_path)
+    source = json.dumps(layout).encode()
+    manifest, files = plugin(fields=fields, extras={"mail-view.json": source}, check_pr=True)
+    assert manifest["owner"] == "mail"
+    assert set(files) == {"plugin.json", "cover.png", "mail-view.json"}
+    assert files["mail-view.json"] == source
+
+
+@pytest.mark.parametrize("fields,layout,extras,error", [
+    ({"owner": "pages"}, MAIL_VIEW, {}, "清单 entry"),
+    ({"permissions": {"source.read": "https"}}, MAIL_VIEW, {}, "清单 permissions"),
+    ({"capabilities": ["mail.view", "settings", "action"]}, MAIL_VIEW, {}, "能力"),
+    ({"capabilities": ["mail.view"]}, MAIL_VIEW, {}, "settings"),
+    ({"refreshSeconds": 120}, MAIL_VIEW, {}, "refreshSeconds"),
+    ({"material": {}}, MAIL_VIEW, {}, "清单字段"),
+    ({}, {**MAIL_VIEW, "version": True}, {}, "版本"),
+    ({}, {**MAIL_VIEW, "showUnread": "true"}, {}, "showUnread"),
+    ({}, {**MAIL_VIEW, "command": "readAll"}, {}, "入口"),
+    ({}, {**MAIL_VIEW, "startDateSetting": "missing"}, {}, "startDateSetting"),
+    ({}, {**MAIL_VIEW, "aliasesSetting": "start_date"}, {}, "aliasesSetting"),
+    ({}, MAIL_VIEW, {"main.js": b"function refresh() {}"}, "未支持的文件"),
+])
+def test_mail_view_rejects_permissions_mismatches_and_extra_files(plugin, fields, layout, extras, error):
+    with pytest.raises(ValueError, match=error):
+        plugin(fields=mail_manifest(**fields), extras={"mail-view.json": json.dumps(layout).encode(), **extras})
+
+
+@pytest.mark.parametrize("index,field,value,error", [
+    (0, "default", "2026-11-28", "0001-01-01"),
+    (1, "default", '[{"address":"alice@example.test","alias":"Alice"}]', "默认空列表"),
+    (1, "maxItems", 21, "maxItems"),
+    (1, "item", [{"key": "address", "label": "账号", "type": "text", "default": "请输入邮箱"}], "address.*alias"),
+])
+def test_mail_view_rejects_invalid_setting_definitions(plugin, index, field, value, error):
+    fields = mail_manifest()
+    fields["settings"][index][field] = value
+    with pytest.raises(ValueError, match=error):
+        plugin(fields=fields, extras={"mail-view.json": json.dumps(MAIL_VIEW).encode()})
+
+
 def material_manifest(**fields):
     return {
         "name": "材质", "runtime": "material", "owner": "appearance", "entry": "sample.wgsl",
