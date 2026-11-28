@@ -1,0 +1,79 @@
+{
+    "id":  "gege.med-reminder",
+    "name":  "吃药提醒",
+    "titleAccent":  "提醒",
+    "author":  "哥哥",
+    "version":  "1.0.0",
+    "api":  1,
+    "runtime":  "js",
+    "refreshSeconds":  60,
+    "entry":  "main.js",
+    "cover":  "cover.png",
+    "owner":  "status",
+    "capabilities":  [
+                         "settings",
+                         "status.page",
+                         "status.canvas",
+                         "action",
+                         "storage",
+                         "timer",
+                         "island.pinned",
+                         "notice"
+                     ],
+    "dataVersion":  1,
+    "permissions":  {
+
+                    },
+    "settings":  [
+                     {
+                         "key":  "window",
+                         "label":  "提醒容错（分钟）",
+                         "type":  "number",
+                         "default":  "10",
+                         "min":  1,
+                         "max":  120,
+                         "step":  1
+                     }
+                 ],
+    "statusLayout":  {
+                         "components":  [
+                                            {
+                                                "type":  "canvas"
+                                            },
+                                            {
+                                                "type":  "alert"
+                                            },
+                                            {
+                                                "type":  "actions"
+                                            }
+                                        ],
+                         "style":  {
+                                       "accent":  "#7ED0A6",
+                                       "density":  "compact",
+                                       "surface":  "plain",
+                                       "emphasis":  "normal"
+                                   },
+                         "canvasFields":  [
+                                              {
+                                                  "key":  "name",
+                                                  "rect":  [
+                                                               127,
+                                                               112,
+                                                               250,
+                                                               26
+                                                           ],
+                                                  "placeholder":  "例如 维生素C"
+                                              },
+                                              {
+                                                  "key":  "dose",
+                                                  "rect":  [
+                                                               127,
+                                                               150,
+                                                               250,
+                                                               26
+                                                           ],
+                                                  "placeholder":  "例如 1片"
+                                              }
+                                          ]
+                     }
+}
