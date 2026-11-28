@@ -1,0 +1,40 @@
+{
+  "id": "tingfeng.favorite-sites",
+  "name": "我的常用网站",
+  "author": "tingfeng",
+  "version": "1.3.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": ["status.page", "settings", "storage", "action"],
+  "dataVersion": 1,
+  "permissions": {},
+  "network": {
+    "hosts": ["www.baidu.com", "www.bilibili.com", "github.com", "www.zhihu.com"]
+  },
+  "settings": [
+    {
+      "key": "sites",
+      "label": "网站列表",
+      "type": "list",
+      "default": "[]",
+      "maxItems": 8,
+      "item": [
+        {"key": "name", "label": "网站名称", "type": "text", "default": "新网站"},
+        {"key": "url", "label": "网址", "type": "text", "default": "https://www.baidu.com"}
+      ]
+    }
+  ],
+  "statusLayout": {
+    "components": [
+      {"type": "summary"},
+      {"type": "alert"},
+      {"type": "list"},
+      {"type": "fields"},
+      {"type": "actions"}
+    ],
+    "style": {"accent": "#22A697", "surface": "plain", "density": "compact"}
+  }
+}
