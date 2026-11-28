@@ -1,0 +1,64 @@
+{
+  "id": "aaaaasukaa.salary-days",
+  "name": "欠薪第几天",
+  "titleAccent": "第几天",
+  "author": "AAAAAsukaa",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "refreshSeconds": 60,
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "action",
+    "storage",
+    "settings",
+    "timer"
+  ],
+  "dataVersion": 1,
+  "permissions": {},
+  "settings": [
+    {
+      "key": "title",
+      "label": "标题",
+      "type": "text",
+      "default": "欠薪"
+    },
+    {
+      "key": "anchor",
+      "label": "最后一笔已结清工资的到账日",
+      "type": "date",
+      "default": "2026-02-01"
+    },
+    {
+      "key": "anchor_time",
+      "label": "到账时间",
+      "type": "time",
+      "default": "00:00"
+    },
+    {
+      "key": "monthly",
+      "label": "月薪（填 0 不显示金额）",
+      "type": "number",
+      "default": "0",
+      "min": 0,
+      "max": 1000000,
+      "step": 1000,
+      "unit": "元"
+    }
+  ],
+  "statusLayout": {
+    "components": [
+      {
+        "type": "canvas"
+      }
+    ],
+    "style": {
+      "accent": "#FFC43D",
+      "surface": "plain"
+    }
+  }
+}
