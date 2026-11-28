@@ -243,6 +243,66 @@ test("四位天数按宽度缩字，常驻窄位优先保留完整计数", () =>
     assert.ok(secondary?.group.some(node => node.loop?.kind === "flow"));
 });
 
+test("农历支持按年、指定年份和闰月，列表同时显示对应公历", () => {
+    const lunarData = {...data, "lunar-calendar.json": JSON.parse(read("../lunar-calendar.json"))};
+    for (const [rule, now, expected] of [
+        ["农历1-1", "2026-02-17", "2026-02-17"],
+        ["农历1-1", "2026-02-18", "2027-02-06"],
+        ["农历2027-1-30", "2027-03-06", "2027-03-07"],
+        ["农历3-30", "2027-05-04", "2027-05-05"],
+        ["农历2026-8-15", "2026-09-01", "2026-09-25"],
+        ["农历2025-闰6-1", "2025-07-24", "2025-07-25"],
+        ["农历闰6-1", "2026-07-01", "2026-07-14"],
+    ]) {
+        const scenario = {...customDay("2020-01-01", now, rule, "birthday"), data: lunarData};
+        const [day] = plugin.computeState(scenario).own;
+        assert.equal(day.dateLabel, expected, rule);
+        assert.ok(tickets(plugin.refresh(scenario))[0].group.some(node =>
+            node.text?.includes("农历") && node.text.includes(expected.slice(5).replace("-", "."))));
+        assert.equal(Boolean(plugin.refresh(scenario).notice), now === expected);
+    }
+});
+
+test("无效农历不回退到公历提醒，指定农历原日可累计纪念天数", () => {
+    const lunarData = {...data, "lunar-calendar.json": JSON.parse(read("../lunar-calendar.json"))};
+    const invalid = {...customDay("2026-11-28", "2026-11-28", "农历2026-闰6-1", "birthday"), data: lunarData};
+    assert.equal(plugin.refresh(invalid).notice, undefined);
+    assert.ok(tickets(plugin.refresh(invalid))[0].group.some(node => node.text?.includes("农历日期有误")));
+    const shortMonth = {...customDay("2027-05-01", "2027-05-04", "农历2027-3-30"), data: lunarData};
+    assert.equal(plugin.computeState(shortMonth).own[0].date, null);
+
+    const anniversary = {...customDay("2026-01-01", "2026-02-18", "农历2026-1-1 每年", "anniversary"), data: lunarData};
+    const [day] = plugin.computeState(anniversary).own;
+    assert.equal(day.days, 1);
+    assert.equal(day.dateLabel, "2026-02-17");
+    assert.ok(tickets(plugin.refresh(anniversary))[0].group.some(node => node.text?.includes("02.06")));
+});
+
+test("发薪日遇休提前或顺延，调休上班按工作日计算", () => {
+    for (const [kind, base, today, expected] of [
+        ["payday", "2027-01-06", "2027-02-01", "2027-02-06"],
+        ["payday-early", "2027-01-06", "2027-02-04", "2027-02-04"],
+        ["payday-late", "2027-01-06", "2027-02-06", "2027-02-14"],
+        ["payday-late", "2027-01-06", "2027-02-14", "2027-02-14"],
+        ["payday-late", "2026-12-31", "2027-02-01", "2027-03-01"],
+        ["payday-late", "2026-12-31", "2027-03-01", "2027-03-01"],
+        ["payday-early", "2027-01-01", "2026-12-31", "2026-12-31"],
+        ["payday-late", "2027-01-31", "2027-01-31", "2027-01-31"],
+        ["payday-late", "2027-01-06", "2027-02-15", "2027-03-08"],
+    ]) {
+        const scenario = customDay(base, today, "默认", kind);
+        const [day] = plugin.computeState(scenario).own;
+        assert.equal(day.dateLabel, expected, `${kind} ${today}`);
+    }
+});
+
+test("发薪日缺少下一年假期安排时保留原日期并提示待确认", () => {
+    const scenario = customDay("2027-12-01", "2027-12-31", "默认", "payday-late");
+    const [day] = plugin.computeState(scenario).own;
+    assert.equal(day.dateLabel, "2028-01-01");
+    assert.ok(tickets(plugin.refresh(scenario))[0].group.some(node => node.text?.includes("假期待公布")));
+});
+
 test("恢复最近即使筛选隐藏目标车票，也显示常驻反馈", () => {
     const current = input("design");
     const first = plugin.refresh(current);
