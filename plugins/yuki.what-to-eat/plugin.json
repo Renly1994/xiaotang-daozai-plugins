@@ -1,0 +1,126 @@
+{
+  "id": "yuki.what-to-eat",
+  "name": "今天吃什么",
+  "titleAccent": "吃什么",
+  "author": "Yuki",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "refreshSeconds": 600,
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "action",
+    "settings",
+    "storage",
+    "timer"
+  ],
+  "dataVersion": 1,
+  "permissions": {},
+  "navigationIcon": {
+    "path": "M4 11 H20 C20 16 16.5 20 12 20 C7.5 20 4 16 4 11 Z M2 11 H22 M13 4 L20 9 M10 4 L17 9",
+    "background": "#EF9A4F"
+  },
+  "statusLayout": {
+    "components": [
+      {
+        "type": "canvas"
+      }
+    ],
+    "style": {
+      "accent": "#EF9A4F"
+    }
+  },
+  "settings": [
+    {
+      "key": "cat",
+      "label": "想吃什么类型",
+      "type": "choice",
+      "default": "all",
+      "choices": [
+        {
+          "value": "all",
+          "label": "全部"
+        },
+        {
+          "value": "home",
+          "label": "家常菜"
+        },
+        {
+          "value": "staple",
+          "label": "米饭面食"
+        },
+        {
+          "value": "breakfast",
+          "label": "早餐"
+        },
+        {
+          "value": "fast",
+          "label": "快餐外卖"
+        },
+        {
+          "value": "treat",
+          "label": "地方风味"
+        }
+      ]
+    },
+    {
+      "key": "meat",
+      "label": "荤素偏好",
+      "type": "choice",
+      "default": "any",
+      "choices": [
+        {
+          "value": "any",
+          "label": "荤素不忌"
+        },
+        {
+          "value": "meat",
+          "label": "偏爱荤"
+        },
+        {
+          "value": "veg",
+          "label": "偏爱素"
+        }
+      ]
+    },
+    {
+      "key": "spicy",
+      "label": "辣度接受程度",
+      "type": "choice",
+      "default": "any",
+      "choices": [
+        {
+          "value": "any",
+          "label": "辣度随意"
+        },
+        {
+          "value": "mild",
+          "label": "微辣可以"
+        },
+        {
+          "value": "none",
+          "label": "不吃辣"
+        }
+      ]
+    },
+    {
+      "key": "custom",
+      "label": "我的私房菜（自定义菜名）",
+      "type": "list",
+      "default": "[]",
+      "maxItems": 20,
+      "item": [
+        {
+          "key": "name",
+          "label": "菜名",
+          "type": "text",
+          "default": "红烧肉"
+        }
+      ]
+    }
+  ]
+}
