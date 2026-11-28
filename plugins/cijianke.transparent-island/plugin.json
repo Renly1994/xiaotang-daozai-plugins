@@ -1,0 +1,28 @@
+{
+  "id": "cijianke.transparent-island",
+  "name": "透明标",
+  "author": "此间客",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "material",
+  "entry": "material.wgsl",
+  "cover": "cover.png",
+  "owner": "appearance",
+  "capabilities": [
+    "appearance.material"
+  ],
+  "dataVersion": 1,
+  "permissions": {
+    "screen.backdrop": true
+  },
+  "material": {
+    "controls": false,
+    "spring": {
+      "stiffness": 1.0,
+      "damping": 0.5
+    },
+    "shadow": 0.0,
+    "foreground": "glass"
+  },
+  "settings": []
+}
