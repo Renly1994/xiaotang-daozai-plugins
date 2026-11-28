@@ -129,6 +129,21 @@ const TEAM_CN = {
     "172": "欧塞尔", "174": "摩纳哥", "7868": "昂热", "6997": "布雷斯特", "3236": "勒阿弗尔", "2697": "勒芒", "175": "朗斯", "166": "里尔", "273": "洛里昂", "167": "里昂", "176": "马赛", "2502": "尼斯", "6851": "巴黎FC", "160": "巴黎圣日耳曼", "169": "雷恩", "180": "斯特拉斯堡", "179": "图卢兹", "170": "特鲁瓦",
     "2052": "北京国安", "21355": "成都蓉城", "131704": "重庆铜梁龙", "22537": "大连英博", "8240": "河南队", "131705": "辽宁铁人", "21910": "青岛海牛", "22198": "青岛西海岸", "7521": "山东泰山", "15515": "上海海港", "977": "上海申花", "22199": "深圳新鹏城", "8239": "天津津门虎", "21506": "武汉三镇", "22536": "云南玉昆", "18203": "浙江队"
 };
+// 选球队页展示正式全名；状态页仍用上面的常用简称，避免比分卡过挤。
+const TEAM_FULL = Object.assign({}, TEAM_CN, {
+    "349": "AFC伯恩茅斯", "331": "布莱顿霍夫阿尔比恩", "388": "考文垂城",
+    "373": "伊普斯维奇城", "382": "曼彻斯特城", "360": "曼彻斯特联",
+    "361": "纽卡斯尔联", "367": "托特纳姆热刺",
+    "127": "汉堡SV", "2950": "美因茨05", "11420": "RB莱比锡",
+    "137": "云达不莱梅", "3307": "帕德博恩07", "7911": "TSG霍芬海姆",
+    "8240": "河南", "18203": "浙江"
+});
+// 首页比分卡对这批球队也使用正式中文名，其余球队继续用简称保持紧凑。
+const FULL_NAME_IDS = new Set([
+    "362", "361", "393", "86", "1068", "89", "83", "244", "90", "102",
+    "110", "103", "111", "124", "132", "11420", "131", "137", "160", "180",
+    "2052", "21355", "131704", "22198", "7521", "15515", "977", "22199", "8239", "21506"
+]);
 const CREST_IDS = new Set(["349", "359", "362", "337", "331", "363", "388", "384", "368", "370", "306", "373", "357", "364", "382", "360", "361", "393", "366", "367", "96", "93", "1068", "83", "85", "90", "3751", "88", "2922", "1538", "99", "97", "87", "101", "244", "86", "89", "243", "94", "102", "103", "104", "105", "107", "2925", "2572", "109", "4057", "3263", "110", "111", "112", "113", "4007", "114", "115", "3997", "239", "118", "17530", "598", "131", "132", "124", "268", "125", "3841", "122", "127", "2950", "11420", "126", "3307", "10388", "133", "7911", "134", "137", "172", "174", "7868", "6997", "3236", "2697", "175", "166", "273", "167", "176", "2502", "6851", "160", "169", "180", "179", "170", "2052", "21355", "131704", "22537", "8240", "131705", "21910", "22198", "7521", "15515", "977", "22199", "8239", "21506", "22536", "18203"]);
 const TEAM_LEAGUE = {"349":"epl","359":"epl","362":"epl","337":"epl","331":"epl","363":"epl","388":"epl","384":"epl","368":"epl","370":"epl","306":"epl","373":"epl","357":"epl","364":"epl","382":"epl","360":"epl","361":"epl","393":"epl","366":"epl","367":"epl","96":"laliga","93":"laliga","1068":"laliga","83":"laliga","85":"laliga","90":"laliga","3751":"laliga","88":"laliga","2922":"laliga","1538":"laliga","99":"laliga","97":"laliga","87":"laliga","101":"laliga","244":"laliga","86":"laliga","89":"laliga","243":"laliga","94":"laliga","102":"laliga","103":"seriea","104":"seriea","105":"seriea","107":"seriea","2925":"seriea","2572":"seriea","109":"seriea","4057":"seriea","3263":"seriea","110":"seriea","111":"seriea","112":"seriea","113":"seriea","4007":"seriea","114":"seriea","115":"seriea","3997":"seriea","239":"seriea","118":"seriea","17530":"seriea","598":"bundesliga","131":"bundesliga","132":"bundesliga","124":"bundesliga","268":"bundesliga","125":"bundesliga","3841":"bundesliga","122":"bundesliga","127":"bundesliga","2950":"bundesliga","11420":"bundesliga","126":"bundesliga","3307":"bundesliga","10388":"bundesliga","133":"bundesliga","7911":"bundesliga","134":"bundesliga","137":"bundesliga","172":"ligue1","174":"ligue1","7868":"ligue1","6997":"ligue1","3236":"ligue1","2697":"ligue1","175":"ligue1","166":"ligue1","273":"ligue1","167":"ligue1","176":"ligue1","2502":"ligue1","6851":"ligue1","160":"ligue1","169":"ligue1","180":"ligue1","179":"ligue1","170":"ligue1","2052":"csl","21355":"csl","131704":"csl","22537":"csl","8240":"csl","131705":"csl","21910":"csl","22198":"csl","7521":"csl","15515":"csl","977":"csl","22199":"csl","8239":"csl","21506":"csl","22536":"csl","18203":"csl"};
 const LEAGUE_TEAMS = {
@@ -455,12 +470,12 @@ function fixtureRound(homeId, awayId, date) {
 }
 
 function buildMatch(event, whoList, today, offset, now) {
-    if (!event || !event.competitions || !event.competitions[0]) return null;
-    const competition = event.competitions[0];
+    if (!event || !Array.isArray(event.competitions) || !event.competitions[0]) return null;
+    const competition = event.competitions[0] || {};
     const status = (event.status && event.status.type) || (competition.status && competition.status.type) || {};
-    const competitors = competition.competitors || [];
-    const homeCompetitor = competitors.find(item => item.homeAway === "home") || competitors[0];
-    const awayCompetitor = competitors.find(item => item.homeAway === "away") || competitors[1];
+    const competitors = Array.isArray(competition.competitors) ? competition.competitors : [];
+    const homeCompetitor = competitors.find(item => item && item.homeAway === "home") || competitors[0];
+    const awayCompetitor = competitors.find(item => item && item.homeAway === "away") || competitors[1];
     if (!homeCompetitor || !awayCompetitor) return null;
 
     const home = teamOf(homeCompetitor);
@@ -852,14 +867,14 @@ function pickerCanvas(view, now, offset) {
     }
 
     const startY = 72;
-    const cellW = 91;
-    const cellH = 46;
+    const cellW = 123;
+    const cellH = 35;
     const gapX = 4;
-    const gapY = 4;
+    const gapY = 2;
     for (let i = 0; i < ids.length; i++) {
         const id = ids[i];
-        const col = i % 4;
-        const row = Math.floor(i / 4);
+        const col = i % 3;
+        const row = Math.floor(i / 3);
         const x = 6 + col * (cellW + gapX);
         const y = startY + row * (cellH + gapY);
         const on = following.includes(id);
@@ -869,12 +884,12 @@ function pickerCanvas(view, now, offset) {
         });
         if (on) nodes.push({ rect: [x, y, 3, cellH], r: 1.5, fill: ACCENT });
         const crest = CREST_IDS.has(id) ? `crests/${id}.png` : "";
-        if (crest) nodes.push({ image: crest, rect: [x + 6, y + 12, 23, 23], fit: "contain" });
-        else nodes.push({ circle: [x + 18, y + 24, 10], fill: "$muted" });
-        nodes.push(textNode(fitLabel(shortCn(TEAM_CN[id] || id), 54, 10), x + 33, y + 22, 10, "$text", {
-            weight: on ? 700 : 500, max_width: 54
+        if (crest) nodes.push({ image: crest, rect: [x + 6, y + 7, 20, 20], fit: "contain" });
+        else nodes.push({ circle: [x + 16, y + 17, 9], fill: "$muted" });
+        nodes.push(textNode(TEAM_FULL[id] || TEAM_CN[id] || id, x + 32, y + 15, 9, "$text", {
+            weight: on ? 700 : 500, max_width: 87
         }));
-        nodes.push(textNode(LEAGUE_LABEL[TEAM_LEAGUE[id]] || "", x + 33, y + 36, 8, "$muted", { max_width: 54 }));
+        nodes.push(textNode(LEAGUE_LABEL[TEAM_LEAGUE[id]] || "", x + 32, y + 28, 7.5, "$muted", { max_width: 87 }));
     }
 
     const base = 338;
@@ -893,6 +908,12 @@ function pickerCanvas(view, now, offset) {
     return { height: 360, nodes };
 }
 
+function pageTeamName(team, fallback) {
+    const id = clean(team && team.id);
+    if (id && FULL_NAME_IDS.has(id)) return TEAM_FULL[id] || fallback;
+    return shortCn(fallback);
+}
+
 function pageCanvas(view, now, offset) {
     if (view.picker) return pickerCanvas(view, now, offset);
     const nodes = [];
@@ -906,20 +927,16 @@ function pageCanvas(view, now, offset) {
     nodes.push(textNode(match.league, 16, 20, 11, "$text", { weight: 800, max_width: 150 }));
     nodes.push(textNode(dateHead(match.day, today), 379, 20, 9, "$muted", { align: "right", max_width: 170 }));
 
-    // 队徽：半透明感由皮肤底色的圆环托住，再压一条很浅的底影。
+    // 队徽直接平面贴在页面上，不再加圆环托底或底影。
     const homeCrest = crestOf(match.home);
     const awayCrest = crestOf(match.away);
-    nodes.push({ circle: [38, 54, 27], fill: "$track" });
-    nodes.push({ rect: [15, 81, 46, 3], r: 1.5, fill: "$track" });
     if (homeCrest) nodes.push({ image: homeCrest, rect: [11, 27, 54, 54], fit: "contain" });
-    nodes.push({ circle: [349, 54, 27], fill: "$track" });
-    nodes.push({ rect: [326, 81, 46, 3], r: 1.5, fill: "$track" });
     if (awayCrest) nodes.push({ image: awayCrest, rect: [322, 27, 54, 54], fit: "contain" });
 
-    nodes.push(textNode(shortCn(match.labelHome), 8, 107, 23, "$text", {
+    nodes.push(textNode(pageTeamName(match.home, match.labelHome), 8, 107, 23, "$text", {
         weight: 800, max_width: 150
     }));
-    nodes.push(textNode(shortCn(match.labelAway), 379, 107, 23, "$text", {
+    nodes.push(textNode(pageTeamName(match.away, match.labelAway), 379, 107, 23, "$text", {
         weight: 800, align: "right", max_width: 150
     }));
 
@@ -947,7 +964,8 @@ function pageCanvas(view, now, offset) {
     nodes.push(textNode(subline, 193.5, 142, 9.5, "$muted", { align: "center", max_width: 340 }));
 
     if (match.state === "in") {
-        const progress = Math.max(0, Math.min(1, match.clock / 5400));
+        const clock = Number(match.clock);
+        const progress = Number.isFinite(clock) ? Math.max(0, Math.min(1, clock / 5400)) : 0;
         nodes.push({ rect: [16, 149, 355, 3], r: 1.5, fill: "$track" });
         if (progress > 0) {
             nodes.push({ rect: [16, 149, Math.max(3, 355 * progress), 3], r: 1.5, fill: ACCENT });
@@ -1023,6 +1041,138 @@ function goalNotice(match) {
     };
 }
 
+function finiteNumber(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+
+// 宿主对画布节点做严格校验；任何 NaN / Infinity 或尺寸为 0 的节点都会让整页报
+// 「状态数据格式无效」。这里在输出前统一兜底，避免单个坏字段拖垮整张状态页。
+function sanitizeNode(node) {
+    if (!node || typeof node !== "object" || Array.isArray(node)) return null;
+    const out = {};
+    for (const [key, value] of Object.entries(node)) {
+        if (typeof value === "number") {
+            out[key] = Number.isFinite(value) ? value
+                : key === "size" ? 10 : key === "opacity" ? 1 : 0;
+        } else {
+            out[key] = value;
+        }
+    }
+    for (const key of ["rect", "circle", "line", "at", "translate", "clip"]) {
+        if (!(key in out)) continue;
+        if (!Array.isArray(out[key])) {
+            delete out[key];
+            continue;
+        }
+        out[key] = out[key].map(value => finiteNumber(value, 0));
+        if (key === "rect" || key === "clip") {
+            if (out[key].length !== 4) {
+                delete out[key];
+                continue;
+            }
+            if (out[key][2] <= 0) out[key][2] = 1;
+            if (out[key][3] <= 0) out[key][3] = 1;
+        } else if (key === "circle") {
+            if (out[key].length !== 3) {
+                delete out[key];
+                continue;
+            }
+            if (out[key][2] <= 0) out[key][2] = 1;
+        } else if (key === "line" && out[key].length !== 4) {
+            delete out[key];
+        } else if ((key === "at" || key === "translate") && out[key].length !== 2) {
+            delete out[key];
+        }
+    }
+    if (Array.isArray(out.group)) out.group = out.group.map(sanitizeNode).filter(Boolean);
+    else if (out.group && typeof out.group === "object") out.group = sanitizeNode(out.group);
+    if (out.scroll && typeof out.scroll === "object") {
+        out.scroll = Object.assign({}, out.scroll);
+        if (out.scroll.content != null) out.scroll.content = Math.max(0, finiteNumber(out.scroll.content, 0));
+    }
+    return out;
+}
+
+function sanitizeCanvas(canvas) {
+    if (!canvas || typeof canvas !== "object") {
+        return { height: 130, nodes: [] };
+    }
+    const out = {
+        height: Math.max(1, finiteNumber(canvas.height, 130)),
+        nodes: Array.isArray(canvas.nodes) ? canvas.nodes.map(sanitizeNode).filter(Boolean) : []
+    };
+    if (Array.isArray(canvas.binds)) out.binds = canvas.binds;
+    return out;
+}
+
+function sanitizePinnedCanvas(canvas) {
+    const out = sanitizeCanvas(canvas);
+    if (canvas && typeof canvas === "object" && finiteNumber(canvas.width, 0) > 0) {
+        out.width = Math.max(1, finiteNumber(canvas.width, 96));
+    }
+    if (canvas && typeof canvas === "object" && canvas.fit_width === true) out.fit_width = true;
+    return out;
+}
+
+function sanitizePinned(pinned) {
+    if (!pinned || typeof pinned !== "object") return null;
+    if (Array.isArray(pinned.canvas)) {
+        const slides = pinned.canvas.map(sanitizePinnedCanvas).filter(Boolean);
+        return slides.length ? { canvas: slides } : null;
+    }
+    if (pinned.canvas && typeof pinned.canvas === "object") {
+        return { canvas: sanitizePinnedCanvas(pinned.canvas) };
+    }
+    return sanitizePinnedCanvas(pinned);
+}
+
+function fallbackResult(input) {
+    const now = Number(input && input.now) || Date.now();
+    const offset = Number(input && input.tz && input.tz.offset_minutes) || 0;
+    let source = {};
+    try {
+        source = input && input.storage && typeof input.storage === "object" ? input.storage : {};
+    } catch (error) {
+        source = {};
+    }
+    const following = Array.isArray(source.following)
+        ? source.following.filter(id => TEAM_CN[clean(id)]).slice(0, FOLLOW_LIMIT).map(clean) : [];
+    const teams = following.map(id => ({
+        id, raw: TEAM_CN[id], cjk: true, label: TEAM_CN[id],
+        aliases: (ALIASES[TEAM_CN[id]] || []).slice(), tokens: [], known: true,
+        crest: CREST_IDS.has(id) ? `crests/${id}.png` : ""
+    }));
+    const view = {
+        ready: false, boardReady: false, parsed: false, status: "invalid",
+        cached: false, dataAt: now, hasFixtures: false, matches: [],
+        teams, following, focus: null, today: new Date(now + offset * 60000).toISOString().slice(0, 10),
+        picker: false, pickerLeague: "epl"
+    };
+    const nodes = [
+        textNode("比分数据读取失败", 193.5, 38, 16, "$text", { align: "center", weight: 800, max_width: 340 }),
+        textNode("已拦截异常结果，稍后会自动重试", 193.5, 62, 10, "$muted", { align: "center", max_width: 340 }),
+        { rect: [132, 76, 124, 22], r: 6, fill: "$track", hover: { fill: "$card" }, hit: { action: "refresh" } },
+        textNode("重试", 194, 91, 10, "$text", { align: "center", weight: 700 })
+    ];
+    footer(nodes, 130, view, now, offset);
+    return {
+        status: {
+            state: "offline", label: "足球比分",
+            summary: "比分数据读取失败，正在自动重试", observed_at: Math.floor(now / 1000)
+        },
+        canvas: sanitizeCanvas({ width: 387, height: 130, nodes }),
+        pinned: sanitizePinned(emptyPinned(teams, view)),
+        notice: undefined,
+        storage: {
+            seen: {}, sent: [], pending: [], lastNoticeAt: 0,
+            following, picker: false, pickerLeague: "epl",
+            cache: [], cacheAt: 0, sourceCache: {}
+        },
+        next_refresh_at: Math.floor(now / 1000) + 60
+    };
+}
+
 function compute(input) {
     const settings = (input && input.settings) || {};
     const storage = normalizeStorage(input);
@@ -1031,7 +1181,6 @@ function compute(input) {
     const today = validDay(input && input.today) ? input.today
         : new Date(now + offset * 60000).toISOString().slice(0, 10);
     const teams = selectedTeams(settings, storage);
-    const selected = validDay(settings.date) ? settings.date : today;
     const maxKick = now + WEEK_MS;
 
     const board = parseSources(input && input.sources, teams, today, offset, now, storage);
@@ -1106,7 +1255,6 @@ function compute(input) {
         nextMatch,
         focus,
         today,
-        selected,
         picker: storage.picker,
         pickerLeague: storage.pickerLeague
     };
@@ -1141,8 +1289,8 @@ function compute(input) {
             summary,
             observed_at: nowSeconds
         },
-        canvas: pageCanvas(view, now, offset),
-        pinned,
+        canvas: sanitizeCanvas(pageCanvas(view, now, offset)),
+        pinned: sanitizePinned(pinned),
         notice,
         storage: {
             seen,
@@ -1161,10 +1309,15 @@ function compute(input) {
 }
 
 function refresh(input) {
-    return compute(input);
+    try {
+        return compute(input);
+    } catch (error) {
+        return fallbackResult(input);
+    }
 }
 
 function action(input) {
+    try {
     const storage = normalizeStorage(input);
     const id = clean(input && input.action && input.action.id);
     if (id === "open-picker") {
@@ -1195,6 +1348,9 @@ function action(input) {
         storage.picker = false;
     }
     return compute(Object.assign({}, input, { storage }));
+    } catch (error) {
+        return fallbackResult(input);
+    }
 }
 
 
