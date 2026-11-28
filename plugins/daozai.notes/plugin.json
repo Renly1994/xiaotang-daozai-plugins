@@ -3,7 +3,11 @@
   "name": "便签本",
   "titleAccent": "本",
   "author": "岛仔",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "navigationIcon": {
+    "path": "M7 4.5H15L19 8.5V18Q19 20 17 20H7Q5 20 5 18V6.5Q5 4.5 7 4.5Z M15 4.5V8.5H19 M8.5 11H15.5 M8.5 14.5H15.5 M8.5 17.5H12.5",
+    "background": "#A66319"
+  },
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
