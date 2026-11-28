@@ -33,11 +33,15 @@ NAVIGATION_NUMBER = re.compile(
     r"[ \t\r\n]*([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[Ee][+-]?[0-9]+)?)[ \t\r\n]*,?"
 )
 OPTIONAL_FILES = {"README.md", "LICENSE", "LICENSE.txt"}
-SCRIPT_OWNERS = {"tasks": {"card"}, "status": {"status.page"}, "quota": {"quota.source"}}
+SCRIPT_OWNERS = {
+    "tasks": {"card"}, "status": {"status.page"}, "quota": {"quota.source"},
+    "wireless": {"wireless.devices"},
+}
 SCRIPT_CAPABILITIES = {
     "status.page", "status.canvas", "island.pinned", "action", "event", "notice",
-    "timer", "storage", "settings", "card", "calendar.marker", "quota.source",
+    "timer", "storage", "settings", "card", "calendar.marker", "quota.source", "wireless.devices",
 }
+WIRELESS_SCRIPT_CAPABILITIES = {"wireless.devices", "timer", "settings", "storage"}
 DOMAIN = re.compile(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
 CONTROL_ID = re.compile(r"[a-z][a-z0-9_-]{0,39}")
 WINDOWS_DEVICE = re.compile(r"CON|PRN|AUX|NUL|(?:COM|LPT)[1-9]", re.IGNORECASE)
@@ -141,13 +145,17 @@ def check_url(value, hosts, field):
 
 def check_network(manifest, capabilities):
     permissions = manifest.get("permissions")
+    if manifest["owner"] == "wireless" and permissions not in (
+        {"source.read": "loopback"}, {"source.read": "file"},
+    ):
+        raise ValueError("wireless.devices 需要一种本机只读来源：file 或 loopback")
     if permissions in ({"source.read": "loopback"}, {"source.read": "file"}):
         owner = manifest["owner"]
-        if not (owner == "status" or (owner == "quota" and permissions["source.read"] == "loopback")):
-            raise ValueError("permissions 中的本机文件只读权限仅适用于独立状态页，回环只读权限适用于独立状态页和额度来源")
+        if not (owner in {"status", "wireless"} or (owner == "quota" and permissions["source.read"] == "loopback")):
+            raise ValueError("permissions 中的本机文件只读权限仅适用于独立状态页和无线设备来源，回环只读权限还适用于额度来源")
         if "network" in manifest or "attribution" in manifest:
             raise ValueError("本机文件或回环只读权限不能声明 network 或 attribution")
-        if owner == "status" and "refreshSeconds" in manifest:
+        if owner in {"status", "wireless"} and "refreshSeconds" in manifest:
             check_refresh(manifest["refreshSeconds"], "refreshSeconds")
         return
     https = permissions == {"source.read": "https"}
@@ -320,7 +328,7 @@ def check_status_layout(layout, capabilities):
 def check_script(manifest):
     owner = manifest.get("owner")
     if not isinstance(owner, str) or owner not in SCRIPT_OWNERS:
-        raise ValueError("集市支持待办、状态页和 AI 额度归属")
+        raise ValueError("集市支持待办、状态页、AI 额度和无线设备来源归属")
     capabilities = manifest.get("capabilities")
     if not isinstance(capabilities, list) or any(
         not isinstance(name, str) or name not in SCRIPT_CAPABILITIES for name in capabilities
@@ -331,6 +339,10 @@ def check_script(manifest):
         raise ValueError("清单能力重复声明")
     if "quota.source" in names and owner != "quota":
         raise ValueError("quota.source 只适用于 AI 额度归属")
+    if "wireless.devices" in names and owner != "wireless":
+        raise ValueError("wireless.devices 只适用于无线设备来源归属")
+    if owner == "wireless" and names - WIRELESS_SCRIPT_CAPABILITIES:
+        raise ValueError("无线设备来源只支持 wireless.devices、timer、settings 和 storage")
     independent_page = owner == "status" and "status.page" in names
     if "calendar.marker" in names and not independent_page:
         raise ValueError("calendar.marker 只适用于声明了 status.page 的独立状态页插件")
