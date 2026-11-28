@@ -32,6 +32,7 @@ function render(input) {
   const colors = settings.up_color === "green" ? { up: DOWN, down: UP } : { up: UP, down: DOWN };
   const threshold = positive(settings.alert_pct);
   const alerts = readAlerts(settings.alerts);
+  const plans = readPlans(settings.plans);
   const source = (input.sources && input.sources.quotes) || { status: "unconfigured" };
   const sourceA = (input.sources && input.sources.a) || { status: "unconfigured" };
   const sourceB = (input.sources && input.sources.b) || { status: "unconfigured" };
@@ -56,8 +57,8 @@ function render(input) {
   const showingCache = !live.length && cached.length > 0;
   const indexSaved = previous[indexKey] && previous[indexKey].price > 0 ? previous[indexKey] : null;
   const indexRow = split.index && split.index.price > 0 ? split.index : source.status !== "ready" ? indexSaved : null;
-  applyNames(rows, alerts);
-  if (indexRow) applyNames([indexRow], alerts);
+  applyNames(rows, alerts, plans);
+  if (indexRow) applyNames([indexRow], alerts, plans);
   applyQuoteDays(charts, rows);
   const tracked = indexRow && indexRow.price > 0 ? rows.concat([indexRow]) : rows;
   const sent = pruneSent(storage.sent, tracked);
@@ -66,7 +67,7 @@ function render(input) {
   if (live.length) {
     const seen = {};
     for (let index = 0; index < pending.length; index++) seen[pending[index].id] = true;
-    const fresh = collectNotices(tracked, previous, alerts, sent, threshold, today, now, title);
+    const fresh = collectNotices(tracked, previous, alerts, plans, sent, threshold, today, now, title);
     for (let index = 0; index < fresh.length && pending.length < 16; index++) {
       const item = fresh[index];
       if (seen[item.id] || (item.key && sent[item.key])) continue;
@@ -84,7 +85,7 @@ function render(input) {
   const keyB = symbolKey(norm(tokens[1] || ""));
   const focusStatus = focus && focus === keyB ? sourceB.status : sourceA.status;
   const series = makeSeries(focus, period, charts, tape, quoteOf(focus, rows, indexRow, indexKey), colors, focusStatus, indexKey);
-  const view = buildCanvas(title, phase, rows, colors, alerts, today, focus, period, series, indexRow, indexKey);
+  const view = buildCanvas(title, phase, rows, colors, alerts, plans, today, focus, period, series, indexRow, indexKey);
   const status = buildStatus({ status: quoteState }, rows, phase, latest, now, tokens, indexRow, indexKey);
   const pinned = pinnedCanvases(indexRow, rows, colors, indexKey);
   const slots = [];
@@ -152,7 +153,7 @@ function buildStatus(source, rows, phase, latest, now, tokens, indexRow, indexKe
   return status;
 }
 
-function buildCanvas(title, phase, rows, colors, alerts, today, focus, period, series, indexRow, indexKey) {
+function buildCanvas(title, phase, rows, colors, alerts, plans, today, focus, period, series, indexRow, indexKey) {
   const nodes = header(title, phase, indexRow, colors, indexKey);
   if (!rows.length && focus !== indexKey) {
     nodes.push(
@@ -165,7 +166,7 @@ function buildCanvas(title, phase, rows, colors, alerts, today, focus, period, s
   if (!rows.length) return { canvas: { height: 210, nodes } };
   const body = [];
   for (let index = 0; index < rows.length; index++) {
-    body.push.apply(body, rowNodes(rows[index], index * ROW, colors, alertFor(alerts, rows[index], today), rows[index].key === focus, "sym-" + index));
+    body.push.apply(body, rowNodes(rows[index], index * ROW, colors, alertFor(alerts, plans, rows[index], today), rows[index].key === focus, "sym-" + index));
   }
   if (rows.length > VISIBLE) {
     nodes.push({
@@ -1136,39 +1137,40 @@ function pinnedCanvases(indexRow, rows, colors, indexKey) {
   });
 }
 
-function collectNotices(rows, previous, alerts, sent, threshold, today, now, title) {
+function collectNotices(rows, previous, alerts, plans, sent, threshold, today, now, title) {
   const found = [];
   for (const row of rows) {
     if (!(row.price > 0) || !isFresh(row, now)) continue;
     const prior = number((previous[row.key] || {}).price);
+    if (!Number.isFinite(prior)) continue;
     for (const alert of matches(alerts, row)) {
-      if (isPending(alert.since, today) || !Number.isFinite(prior)) continue;
-      if (alert.price > 0) {
-        const side = prior < alert.price && row.price >= alert.price ? "up"
-          : prior > alert.price && row.price <= alert.price ? "down" : "";
-        if (side) {
-          const verb = side === "up" ? "涨破" : "跌破";
-          found.push({
-            id: ["px", row.key, trimNumber(alert.price), side, row.at || now].join("|"),
-            title: cut(title, 16),
-            body: cut(row.name + " " + row.priceText + "，" + verb + " " + trimNumber(alert.price), 110)
-          });
-        }
-      }
-      const stop = alert.cost > 0 && alert.stopPct > 0 ? targetPrice(alert.cost, alert.stopPct, -1) : 0;
+      if (isPending(alert.since, today) || !(alert.price > 0)) continue;
+      const side = prior < alert.price && row.price >= alert.price ? "up"
+        : prior > alert.price && row.price <= alert.price ? "down" : "";
+      if (!side) continue;
+      const verb = side === "up" ? "涨破" : "跌破";
+      found.push({
+        id: ["px", row.key, trimNumber(alert.price), side, row.at || now].join("|"),
+        title: cut(title, 16),
+        body: cut(row.name + " " + row.priceText + "，" + verb + " " + trimNumber(alert.price), 110)
+      });
+    }
+    for (const plan of matches(plans, row)) {
+      if (isPending(plan.since, today)) continue;
+      const stop = plan.cost > 0 && plan.stopPct > 0 ? targetPrice(plan.cost, plan.stopPct, -1) : 0;
       if (stop > 0 && prior > stop && row.price <= stop) {
         found.push({
           id: ["sl", row.key, trimNumber(stop), row.at || now].join("|"),
           title: cut(title, 16),
-          body: cut(row.name + " " + row.priceText + "，止损 " + trimNumber(alert.stopPct) + "%，跌破 " + trimNumber(stop), 110)
+          body: cut(row.name + " " + row.priceText + "，止损 " + trimNumber(plan.stopPct) + "%，跌破 " + trimNumber(stop), 110)
         });
       }
-      const take = alert.cost > 0 && alert.takePct > 0 ? targetPrice(alert.cost, alert.takePct, 1) : 0;
+      const take = plan.cost > 0 && plan.takePct > 0 ? targetPrice(plan.cost, plan.takePct, 1) : 0;
       if (take > 0 && prior < take && row.price >= take) {
         found.push({
           id: ["tp", row.key, trimNumber(take), row.at || now].join("|"),
           title: cut(title, 16),
-          body: cut(row.name + " " + row.priceText + "，止盈 " + trimNumber(alert.takePct) + "%，涨破 " + trimNumber(take), 110)
+          body: cut(row.name + " " + row.priceText + "，止盈 " + trimNumber(plan.takePct) + "%，涨破 " + trimNumber(take), 110)
         });
       }
     }
@@ -1338,18 +1340,29 @@ function snapshot(rows, indexRow) {
   return quotes;
 }
 
-function readAlerts(raw) {
+function readList(raw) {
   let rows = [];
   try {
     rows = JSON.parse(raw || "[]");
   } catch (error) {
     rows = [];
   }
-  if (!Array.isArray(rows)) return [];
-  return rows.map(row => ({
+  return Array.isArray(rows) ? rows : [];
+}
+
+function readAlerts(raw) {
+  return readList(raw).map(row => ({
     key: symbolKey(norm(row && row.code)),
     name: textOr(row && row.name, ""),
     price: Number(row && row.price),
+    since: String(row && row.since || "")
+  })).filter(row => row.key);
+}
+
+function readPlans(raw) {
+  return readList(raw).map(row => ({
+    key: symbolKey(norm(row && row.code)),
+    name: textOr(row && row.name, ""),
     cost: Number(row && row.cost),
     stopPct: Number(row && row.stop_pct),
     takePct: Number(row && row.take_pct),
@@ -1363,15 +1376,15 @@ function targetPrice(cost, pct, direction) {
   return cents > 0 ? cents : 0;
 }
 
-function alertFor(alerts, row, today) {
+function alertFor(alerts, plans, row, today) {
   const list = matches(alerts, row);
-  const found = list.find(alert => alert.price > 0 || alert.cost > 0 || (alert.name && alert.name !== row.name));
-  if (!found) return null;
-  const costed = list.find(alert => alert.cost > 0 && !isPending(alert.since, today));
+  const found = list.find(alert => alert.price > 0 || (alert.name && alert.name !== row.name));
+  const costed = matches(plans, row).find(plan => plan.cost > 0 && !isPending(plan.since, today));
+  if (!found && !costed) return null;
   return {
-    price: found.price,
-    since: found.since,
-    pending: isPending(found.since, today),
+    price: found ? found.price : 0,
+    since: found ? found.since : "",
+    pending: found ? isPending(found.since, today) : false,
     cost: costed ? costed.cost : 0
   };
 }
@@ -1404,11 +1417,16 @@ function quoteDay(row) {
   return shanghaiDate(row.at * 1000);
 }
 
-function applyNames(rows, alerts) {
+function applyNames(rows, alerts, plans) {
   for (const row of rows) {
-    const named = matches(alerts, row).find(item => item.name && item.name !== "贵州茅台");
-    if (named) row.name = named.name;
+    const named = customName(matches(alerts, row)) || customName(matches(plans, row));
+    if (named) row.name = named;
   }
+}
+
+function customName(list) {
+  const found = list.find(item => item.name && item.name !== "贵州茅台");
+  return found ? found.name : "";
 }
 
 function phaseOf(tokens, nowMs, source, parsedCount, showingCache) {
