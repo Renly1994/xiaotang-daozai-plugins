@@ -1,0 +1,92 @@
+{
+  "id": "bee.btc",
+  "name": "现货比特币",
+  "titleAccent": "比特币",
+  "author": "混乱小蜜蜂🐝",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "status",
+  "capabilities": [
+    "status.page",
+    "status.canvas",
+    "action",
+    "storage",
+    "island.pinned",
+    "settings",
+    "timer"
+  ],
+  "dataVersion": 1,
+  "permissions": {
+    "source.read": "https"
+  },
+  "network": {
+    "hosts": [
+      "data-api.binance.vision",
+      "qt.gtimg.cn"
+    ],
+    "sources": [
+      {
+        "key": "intraday",
+        "url": "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=96"
+      },
+      {
+        "key": "daily",
+        "url": "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=30"
+      },
+      {
+        "key": "fx",
+        "url": "https://qt.gtimg.cn/utf8/q=whUSDCNY"
+      }
+    ],
+    "minRefreshSeconds": 300
+  },
+  "attribution": {
+    "label": "币安行情 · 腾讯汇率"
+  },
+  "statusLayout": {
+    "components": [
+      { "type": "canvas" }
+    ],
+    "style": {
+      "accent": "#F7931A",
+      "icon": "chart"
+    }
+  },
+  "settings": [
+    {
+      "key": "currency",
+      "label": "计价货币",
+      "type": "choice",
+      "default": "usd",
+      "choices": [
+        { "value": "usd", "label": "USDT" },
+        { "value": "cny", "label": "人民币（估算）" }
+      ]
+    },
+    {
+      "key": "up_color",
+      "label": "涨跌颜色",
+      "type": "choice",
+      "default": "red",
+      "choices": [
+        { "value": "red", "label": "红涨绿跌" },
+        { "value": "green", "label": "绿涨红跌" }
+      ]
+    },
+    {
+      "key": "days",
+      "label": "走势区间",
+      "type": "choice",
+      "default": "week",
+      "choices": [
+        { "value": "day", "label": "24小时" },
+        { "value": "week", "label": "7日" },
+        { "value": "month", "label": "30日" }
+      ]
+    }
+  ],
+  "refreshSeconds": 900
+}
