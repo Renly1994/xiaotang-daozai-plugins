@@ -208,7 +208,10 @@ var TIP_OVERRIDES = {
     "花甲粉": ["汤底拌粉，鲜到掉眉。", "粉丝吸满汤汁才好吃。"]
 };
 
-var RELAXED_NOTE = "当前筛选没有可选的菜，已放宽条件帮你选";
+// 兜底说明：tier 1 = 保留辣度、放宽类型和荤素；tier 2 = 用户确认后放宽全部条件
+var RELAXED_NOTE_1 = "当前筛选没有匹配，已放宽类型和荤素帮你选（辣度保留）";
+var RELAXED_NOTE_2 = "当前筛选没有匹配，已放宽全部条件帮你选";
+var SINGLE_NOTE = "这个组合下只剩这一道，换不了别的啦";
 
 // ---- 紧凑卡片布局（自绘画布，颜色全部用皮肤令牌，跟随岛仔材质） ----
 // 版式：菜名 + 属性标签居中成组 → 按钮 → 一行小贴士（切换即时刷新，保持跟手）
@@ -333,7 +336,7 @@ function pageIdle(input, settings) {
     return { canvas: { height: by + 50, nodes: nodes }, status: { state: "idle", label: "今天吃什么" } };
 }
 
-function pagePicked(dish, relaxed) {
+function pagePicked(dish, tier, list, settings) {
     var h = hashOf(dish[0]);
     var tags = [CAT_LABEL[dish[1]] || dish[1]];
     if (dish[1] !== "custom") {
@@ -351,18 +354,41 @@ function pagePicked(dish, relaxed) {
     var bx = centerAll(314);
     nodes = nodes.concat(buttonNodes("换一个", bx, by, true, "reroll"));
     nodes = nodes.concat(buttonNodes("重新来", bx + 164, by, false, "reset"));
-    var tips = TIP_OVERRIDES[dish[0]] || TIPS[dish[1]] || TIPS.custom;
-    var note = relaxed ? RELAXED_NOTE : tips[(h >>> 3) % tips.length];
+    // 底行说明优先级：放宽说明 > 单候选提示 > 普通小贴士（均由当前输入推导，刷新后不丢）
+    var note, noteFill = "$muted";
+    if (tier === 1) { note = RELAXED_NOTE_1; noteFill = "$accent"; }
+    else if (tier === 2) { note = RELAXED_NOTE_2; noteFill = "$accent"; }
+    else if (filterDishes(list, settings, 0).length === 1) { note = SINGLE_NOTE; noteFill = "$accent"; }
+    else {
+        var tips = TIP_OVERRIDES[dish[0]] || TIPS[dish[1]] || TIPS.custom;
+        note = tips[(h >>> 3) % tips.length];
+    }
     nodes.push({
         id: "note",
         text: note,
         at: [centerAll(Math.min(Math.round(estWidth(note, 13)), CONTENT_W)), by + 56],
-        size: 13, fill: relaxed ? "$accent" : "$muted", max_width: CONTENT_W, lines: 1
+        size: 13, fill: noteFill, max_width: CONTENT_W, lines: 1
     });
     return {
         canvas: { height: by + 70, nodes: nodes },
         status: { state: "succeeded", label: dish[0] }
     };
+}
+
+// 连保留辣度都凑不出候选时的「无匹配」页，由用户决定是否彻底放宽
+function pageNoMatch() {
+    var nodes = [titleNodes("没有匹配的菜", 0, true)];
+    var line = "放宽一点口味，或到设置里调整筛选再试";
+    nodes.push({
+        id: "greet",
+        text: line,
+        at: [centerAll(Math.min(Math.round(estWidth(line, 14)), CONTENT_W)), 58],
+        size: 14, fill: "$muted", max_width: CONTENT_W, lines: 1
+    });
+    var by = 72;
+    nodes = nodes.concat(buttonNodes("放宽选", centerAll(314), by, true, "relax"));
+    nodes = nodes.concat(buttonNodes("重新来", centerAll(314) + 164, by, false, "reset"));
+    return { canvas: { height: by + 50, nodes: nodes }, status: { state: "idle", label: "没有匹配的菜" } };
 }
 
 // 以下为工具函数：脚本每次调用都从头运行，页面内容必须只由输入决定。
@@ -400,11 +426,13 @@ function buildPool(settings) {
     return list;
 }
 
-function filterDishes(list, settings) {
+// tier 0 = 全部条件；tier 1 = 保留辣度、放宽类型和荤素；tier 2 = 仅辣度也放开（需用户确认）
+function filterDishes(list, settings, tier) {
+    tier = tier || 0;
     var catKey = (settings && settings.cat) || "all";
-    var catMap = CAT_FILTER[catKey] || null;
-    var meat = (settings && settings.meat) || "any";
-    var spicy = (settings && settings.spicy) || "any";
+    var catMap = tier >= 1 ? null : (CAT_FILTER[catKey] || null);
+    var meat = tier >= 1 ? "any" : ((settings && settings.meat) || "any");
+    var spicy = tier >= 2 ? "any" : ((settings && settings.spicy) || "any");
     var out = [];
     for (var i = 0; i < list.length; i++) {
         var d = list[i];
@@ -419,10 +447,18 @@ function filterDishes(list, settings) {
     return out;
 }
 
-function pickDish(list, indices, currentName) {
+// 同一道菜 = 菜名与来源（内置/私房）都一致，避免同名菜误判为重复
+function samePick(dish, ref) {
+    if (!ref) return false;
+    var name = typeof ref === "string" ? ref : ref.name;
+    var custom = typeof ref === "string" ? false : !!ref.custom;
+    return dish[0] === name && (dish[1] === "custom") === custom;
+}
+
+function pickDish(list, indices, currentRef) {
     var candidates = [];
     for (var i = 0; i < indices.length; i++) {
-        if (list[indices[i]][0] !== currentName) candidates.push(indices[i]);
+        if (!samePick(list[indices[i]], currentRef)) candidates.push(indices[i]);
     }
     if (candidates.length === 0) {
         for (var j = 0; j < indices.length; j++) candidates.push(indices[j]);
@@ -431,10 +467,15 @@ function pickDish(list, indices, currentName) {
     return list[candidates[Math.floor(Math.random() * candidates.length)]];
 }
 
-function findDish(list, name) {
-    if (!name) return null;
+// 兼容旧版字符串记录；新版记录 {name, custom, tier}，可区分私房菜与内置菜
+function resolvePicked(list, ref) {
+    if (!ref) return null;
+    var name, wantCustom;
+    if (typeof ref === "string") { name = ref; wantCustom = null; }
+    else if (ref && typeof ref.name === "string") { name = ref.name; wantCustom = !!ref.custom; }
+    else return null;
     for (var i = 0; i < list.length; i++) {
-        if (list[i][0] === name) return list[i];
+        if (list[i][0] === name && (wantCustom === null || (list[i][1] === "custom") === wantCustom)) return list[i];
     }
     return null;
 }
@@ -449,8 +490,8 @@ function greeting(input) {
             : -new Date().getTimezoneOffset();
         var hour = new Date(now + offset * 60000).getUTCHours();
         if (hour >= 5 && hour < 10) line = "早上好！今天早餐吃点啥？点「开始」抽一个！";
-        else if (hour < 14) line = "午饭时间到！纠结吃什么？点「开始」帮你选！";
-        else if (hour < 21) line = "晚饭想好了吗？点「开始」，今天就吃它！";
+        else if (hour >= 10 && hour < 14) line = "午饭时间到！纠结吃什么？点「开始」帮你选！";
+        else if (hour >= 14 && hour < 21) line = "晚饭想好了吗？点「开始」，今天就吃它！";
         else line = "夜宵时刻！晚上的胃是另一个胃，点「开始」！";
     } catch (e) { /* 时间不可用时用默认文案 */ }
     return line;
@@ -461,10 +502,11 @@ function refresh(input) {
     var settings = input.settings || {};
     var storage = input.storage || {};
     var list = buildPool(settings);
-    var picked = findDish(list, storage.picked);
+    var picked = resolvePicked(list, storage.picked);
     if (picked) {
-        var page = pagePicked(picked, false);
-        page.storage = { picked: picked[0] };
+        var tier = (storage.picked && storage.picked.tier) || 0;
+        var page = pagePicked(picked, tier, list, settings);
+        page.storage = { picked: { name: picked[0], custom: picked[1] === "custom", tier: tier } };
         return page;
     }
     // 上次抽中的菜已不存在（如删掉了私房菜）→ 回到待选页并清掉旧记录
@@ -484,21 +526,34 @@ function action(input) {
     var list = buildPool(settings);
 
     if (id === "start" || id === "reroll") {
-        var indices = filterDishes(list, settings);
-        var relaxed = indices.length === 0;
-        if (relaxed) {
-            indices = [];
-            for (var i = 0; i < list.length; i++) indices.push(i);
-        }
+        // 分级兜底：严格筛选 → 保留辣度放宽其余 → 交由「无匹配」页让用户决定
+        var indices = filterDishes(list, settings, 0);
+        var tier = 0;
+        if (indices.length === 0) { indices = filterDishes(list, settings, 1); tier = 1; }
         var dish = pickDish(list, indices, storage.picked || null);
         if (!dish) {
-            var empty = pageIdle(input, settings);
-            empty.storage = { picked: null };
-            return empty;
+            var none = pageNoMatch();
+            none.storage = { picked: null };
+            return none;
         }
-        var page = pagePicked(dish, relaxed);
-        page.storage = { picked: dish[0] };
+        var page = pagePicked(dish, tier, list, settings);
+        page.storage = { picked: { name: dish[0], custom: dish[1] === "custom", tier: tier } };
         return page;
+    }
+
+    if (id === "relax") {
+        // 用户在「无匹配」页确认彻底放宽
+        var all = [];
+        for (var i = 0; i < list.length; i++) all.push(i);
+        var relaxed = pickDish(list, all, storage.picked || null);
+        if (!relaxed) {
+            var idle0 = pageIdle(input, settings);
+            idle0.storage = { picked: null };
+            return idle0;
+        }
+        var pageR = pagePicked(relaxed, 2, list, settings);
+        pageR.storage = { picked: { name: relaxed[0], custom: relaxed[1] === "custom", tier: 2 } };
+        return pageR;
     }
 
     if (id === "reset") {
@@ -508,10 +563,11 @@ function action(input) {
     }
 
     // 未知动作：按当前存储重建页面
-    var picked = findDish(list, storage.picked);
+    var picked = resolvePicked(list, storage.picked);
     if (picked) {
-        var again = pagePicked(picked, false);
-        again.storage = { picked: picked[0] };
+        var tier = (storage.picked && storage.picked.tier) || 0;
+        var again = pagePicked(picked, tier, list, settings);
+        again.storage = { picked: { name: picked[0], custom: picked[1] === "custom", tier: tier } };
         return again;
     }
     var back = pageIdle(input, settings);
