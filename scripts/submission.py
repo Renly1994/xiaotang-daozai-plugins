@@ -20,7 +20,6 @@ PACKAGE_FILES = {
     "plugin.json": 32 * 1024,
     "main.js": 256 * 1024,
     "shortcuts.json": 4 * 1024,
-    MAIL_VIEW_ENTRY: 4 * 1024,
     WIRELESS_ENTRY: 256 * 1024,
     "cover.png": 256 * 1024,
 }
@@ -106,6 +105,9 @@ def check_wireless(payload, manifest):
 
 
 def check_mail_view(raw, manifest):
+    def valid_text(value):
+        return isinstance(value, str) and bool(value.strip()) and len(value) <= 80
+
     if manifest.keys() - {
         "id", "name", "author", "version", "api", "runtime", "entry", "cover", "owner",
         "capabilities", "dataVersion", "permissions", "settings", "refreshSeconds",
@@ -118,10 +120,12 @@ def check_mail_view(raw, manifest):
     if capabilities not in (["mail.view"], ["mail.view", "settings"], ["settings", "mail.view"]):
         raise ValueError("邮箱视图须声明 mail.view 能力，可选 settings 能力")
     settings = manifest.get("settings")
-    if not isinstance(settings, list) or (settings and "settings" not in capabilities):
+    if not isinstance(settings, list) or len(settings) > 32:
+        raise ValueError("邮箱视图 settings 必须是最多 32 项的列表")
+    if settings and "settings" not in capabilities:
         raise ValueError("邮箱视图有设置时须声明 settings 能力")
 
-    layout = load_json(raw, MAIL_VIEW_ENTRY)
+    layout = load_json(raw, MAIL_VIEW_ENTRY, reject_duplicate_keys=True)
     if not isinstance(layout, dict) or layout.keys() - {"version", "showUnread", "startDateSetting", "aliasesSetting"}:
         raise ValueError("邮箱视图入口包含不支持的字段")
     if type(layout.get("version")) is not int or layout["version"] != 1:
@@ -132,7 +136,7 @@ def check_mail_view(raw, manifest):
     fields = {}
     for field in settings:
         if (not isinstance(field, dict) or not isinstance(key := field.get("key"), str)
-                or not CONTROL_ID.fullmatch(key) or key in fields or not valid_status_text(field.get("label"))):
+                or not CONTROL_ID.fullmatch(key) or key in fields or not valid_text(field.get("label"))):
             raise ValueError("邮箱视图设置的键和标签必须有效，且不能重复")
         fields[key] = field
 
@@ -141,7 +145,7 @@ def check_mail_view(raw, manifest):
         key = layout.get(name)
         if key is None:
             continue
-        field = fields.pop(key, None) if isinstance(key, str) else None
+        field = fields.get(key) if isinstance(key, str) else None
         if field is None or field.get("type") != kind:
             raise ValueError(f"邮箱视图入口 {name} 须引用已声明的 {kind} 设置")
         if kind == "date":
@@ -157,12 +161,13 @@ def check_mail_view(raw, manifest):
                 isinstance(item, dict) and field_keys <= item.keys() <= field_keys | {"multiline"}
                 and item["key"] in ("address", "alias") and item["type"] == "text"
                 and type(item.get("multiline", False)) is bool
-                and valid_status_text(item["label"]) and valid_status_text(item["default"])
+                and valid_text(item["label"]) and valid_text(item["default"])
+                and (not item.get("multiline") or all(
+                    char == "\n" or unicodedata.category(char) != "Cc" for char in item["default"]
+                ))
                 for item in items
             ) or {item["key"] for item in items} != {"address", "alias"}):
                 raise ValueError("邮箱别名须包含 address 和 alias 两个文本字段")
-    if fields:
-        raise ValueError("邮箱视图设置必须由入口引用")
 
 
 def valid_package_path(name):
@@ -458,12 +463,19 @@ def check_material(manifest, source):
         raise ValueError("WGSL 入口不能为空")
 
 
-def load_json(raw, name):
+def load_json(raw, name, *, reject_duplicate_keys=False):
     def invalid_constant(value):
         raise ValueError(f"JSON 不支持 {value}")
 
+    def unique_fields(pairs):
+        fields = dict(pairs)
+        if len(fields) != len(pairs):
+            raise ValueError("JSON 字段重复")
+        return fields
+
     try:
-        return json.loads(raw.decode("utf-8"), parse_constant=invalid_constant)
+        return json.loads(raw.decode("utf-8"), parse_constant=invalid_constant,
+                          object_pairs_hook=unique_fields if reject_duplicate_keys else None)
     except (ValueError, RecursionError) as error:
         raise ValueError(f"{name} 必须是有效的 UTF-8 JSON") from error
 
@@ -535,7 +547,10 @@ def read_plugin(repo, commit, plugin_id):
     for key, value in required.items():
         if type(manifest.get(key)) is not type(value) or manifest[key] != value:
             raise ValueError(f"清单 {key} 与 {entry} 对应的插件格式不符")
-    files[entry] = read(entry, MATERIAL_LIMIT if is_material else PACKAGE_FILES[entry])
+    if entry == MAIL_VIEW_ENTRY:
+        files[entry] = read(entry, 4 * 1024)
+    else:
+        files[entry] = read(entry, MATERIAL_LIMIT if is_material else PACKAGE_FILES[entry])
     allowed = set(files) | OPTIONAL_FILES
     if entry == "shortcuts.json":
         check_shortcuts(files[entry])

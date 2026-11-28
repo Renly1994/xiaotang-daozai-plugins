@@ -107,6 +107,23 @@ def test_mail_view_admits_code_free_package(plugin, monkeypatch, tmp_path, field
     assert files["mail-view.json"] == source
 
 
+def test_mail_view_accepts_unreferenced_settings_and_multiline_text(plugin):
+    fields = mail_manifest()
+    fields["settings"].append({"key": "extra", "label": "附加选项", "type": "switch", "default": "false"})
+    fields["settings"][1]["item"][1].update(multiline=True, default="工作\n邮箱")
+    plugin(fields=fields, extras={"mail-view.json": json.dumps(MAIL_VIEW).encode()})
+
+
+@pytest.mark.parametrize("source,error", [
+    (b'{"version":2,"version":1,"showUnread":true}', "mail-view.json.*JSON"),
+    (b'{"version":1,"showUnread":true}'.ljust(4 * KIB + 1), "超出大小限制"),
+])
+def test_mail_view_rejects_duplicate_fields_and_oversized_source(plugin, source, error):
+    with pytest.raises(ValueError, match=error):
+        plugin(fields=mail_manifest(capabilities=["mail.view"], settings=[]),
+               extras={"mail-view.json": source})
+
+
 @pytest.mark.parametrize("fields,layout,extras,error", [
     ({"owner": "pages"}, MAIL_VIEW, {}, "清单 entry"),
     ({"permissions": {"source.read": "https"}}, MAIL_VIEW, {}, "清单 permissions"),
@@ -504,6 +521,12 @@ def test_accepts_package_data_at_limits(plugin):
     names = [f"data{i}.json" for i in range(4)]
     _, files = plugin(fields={"data": names}, extras={name: b"0" + b" " * (64 * KIB - 1) for name in names})
     assert sum(len(files[name]) for name in names) == 256 * KIB
+
+
+def test_script_accepts_custom_data_named_mail_view(plugin):
+    source = b'{"version":2,"version":1}'.ljust(4 * KIB + 1)
+    _, files = plugin(fields={"data": ["mail-view.json"]}, extras={"mail-view.json": source})
+    assert files["mail-view.json"] == source
 
 
 @pytest.mark.parametrize("kind, count, byte_limit, expected", [
