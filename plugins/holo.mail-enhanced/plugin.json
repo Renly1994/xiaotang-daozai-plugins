@@ -2,78 +2,45 @@
   "id": "holo.mail-enhanced",
   "name": "邮箱（增强）",
   "author": "Holo.",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "api": 1,
-  "runtime": "js",
-  "entry": "main.js",
+  "runtime": "assets",
+  "entry": "mail-view.json",
   "cover": "cover.png",
-  "owner": "status",
-  "navigationIcon": {
-    "path": "M4 6H20V18H4Z M4 7L12 13L20 7",
-    "background": "#586DA8"
-  },
+  "owner": "mail",
   "capabilities": [
-    "status.page",
-    "status.canvas",
-    "action",
-    "settings",
-    "storage"
+    "mail.view",
+    "settings"
   ],
   "dataVersion": 1,
   "permissions": {},
   "settings": [
     {
-      "key": "work_name",
-      "label": "工作邮箱分组名（填「自动」显示邮箱）",
-      "type": "text",
-      "default": "自动"
-    },
-    {
-      "key": "personal_name",
-      "label": "个人邮箱分组名（填「自动」显示邮箱）",
-      "type": "text",
-      "default": "自动"
-    },
-    {
-      "key": "project_name",
-      "label": "项目邮箱分组名（填「自动」显示邮箱）",
-      "type": "text",
-      "default": "自动"
-    },
-    {
-      "key": "study_name",
-      "label": "学习邮箱分组名（填「自动」显示邮箱）",
-      "type": "text",
-      "default": "自动"
-    },
-    {
-      "key": "billing_name",
-      "label": "账单邮箱分组名（填「自动」显示邮箱）",
-      "type": "text",
-      "default": "自动"
-    },
-    {
-      "key": "community_name",
-      "label": "社区邮箱分组名（填「自动」显示邮箱）",
-      "type": "text",
-      "default": "自动"
-    },
-    {
       "key": "start_date",
-      "label": "邮件起始日期（含当天）",
+      "label": "邮件起始日期（含当天，0001-01-01 表示不限）",
       "type": "date",
-      "default": "2026-11-01"
+      "default": "0001-01-01"
+    },
+    {
+      "key": "nicknames",
+      "label": "邮箱别名（不设置时显示邮箱地址）",
+      "type": "list",
+      "default": "[]",
+      "maxItems": 20,
+      "item": [
+        {
+          "key": "address",
+          "label": "已连接的完整邮箱地址",
+          "type": "text",
+          "default": "请输入邮箱"
+        },
+        {
+          "key": "alias",
+          "label": "别名",
+          "type": "text",
+          "default": "请输入别名"
+        }
+      ]
     }
-  ],
-  "statusLayout": {
-    "components": [
-      {
-        "type": "canvas"
-      }
-    ],
-    "style": {
-      "surface": "plain",
-      "accent": "#A3B7FF"
-    }
-  }
+  ]
 }
