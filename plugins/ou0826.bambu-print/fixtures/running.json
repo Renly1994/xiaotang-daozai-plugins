@@ -1,0 +1,9 @@
+{
+  "now": 1795500000000,
+  "sources": {
+    "bridge": {
+      "status": "ready",
+      "text": "{\"api\": 1, \"source\": \"bambumon\", \"updated\": 1763300000.0, \"age\": 1.2, \"printer\": {\"name\": \"A1 mini\", \"model\": \"A1 mini\"}, \"status\": {\"online\": true, \"gcode_state\": \"RUNNING\", \"state_text\": \"打印中\", \"stage_text\": \"热床预热\", \"percent\": 37, \"remaining\": 42, \"layer\": 118, \"total_layer\": 320, \"file\": \"benchy.3mf\", \"nozzle\": 214.5, \"nozzle_target\": 215, \"bed\": 59.8, \"bed_target\": 60, \"hms\": [], \"print_error\": 0, \"ams_text\": \"空闲\"}}"
+    }
+  }
+}

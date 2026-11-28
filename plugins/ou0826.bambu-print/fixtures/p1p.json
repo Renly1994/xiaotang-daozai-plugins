@@ -1,0 +1,9 @@
+{
+  "now": 1795500000000,
+  "sources": {
+    "bridge": {
+      "status": "ready",
+      "text": "{\"api\": 1, \"source\": \"bambumon\", \"updated\": 1763300000.0, \"age\": 1.1, \"printer\": {\"name\": \"P1P\", \"model\": \"P1P\"}, \"status\": {\"online\": true, \"gcode_state\": \"RUNNING\", \"state_text\": \"打印中\", \"stage_text\": \"打印中\", \"percent\": 23, \"remaining\": 95, \"layer\": 40, \"total_layer\": 180, \"file\": \"enclosure.3mf\", \"nozzle\": 215, \"nozzle_target\": 215, \"bed\": 60, \"bed_target\": 60, \"hms\": [], \"print_error\": 0, \"ams_text\": \"空闲\"}}"
+    }
+  }
+}

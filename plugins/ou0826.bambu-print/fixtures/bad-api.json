@@ -1,0 +1,9 @@
+{
+  "now": 1795500000000,
+  "sources": {
+    "bridge": {
+      "status": "ready",
+      "text": "{\"api\": 2, \"status\": {}}"
+    }
+  }
+}
