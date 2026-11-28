@@ -3,7 +3,7 @@
   "name": "自选股",
   "titleAccent": "选股",
   "author": "w2cl",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
@@ -29,15 +29,15 @@
     "sources": [
       {
         "key": "quotes",
-        "url": "https://qt.gtimg.cn/utf8/q=sh000001,{settings.a},{settings.b}"
+        "url": "https://qt.gtimg.cn/utf8/q={settings.index},{settings.a},{settings.b}"
       },
       {
         "key": "a",
-        "url": "https://ifzq.gtimg.cn/appstock/app/kline/mkline?param={settings.a},m5,,320"
+        "url": "https://web.ifzq.gtimg.cn/appstock/app/minute/query?code={settings.a}"
       },
       {
         "key": "b",
-        "url": "https://ifzq.gtimg.cn/appstock/app/kline/mkline?param={settings.b},m5,,320"
+        "url": "https://web.ifzq.gtimg.cn/appstock/app/minute/query?code={settings.b}"
       }
     ],
     "minRefreshSeconds": 60
@@ -55,6 +55,20 @@
       "label": "组合名称",
       "type": "text",
       "default": "自选"
+    },
+    {
+      "key": "index",
+      "label": "上方指数",
+      "type": "choice",
+      "default": "sh000001",
+      "choices": [
+        { "value": "sh000001", "label": "上证指数" },
+        { "value": "sz399001", "label": "深证成指" },
+        { "value": "sz399006", "label": "创业板指" },
+        { "value": "sh000300", "label": "沪深300" },
+        { "value": "sh000016", "label": "上证50" },
+        { "value": "sh000688", "label": "科创50" }
+      ]
     },
     {
       "key": "a",
@@ -116,6 +130,63 @@
           "max": 1000000,
           "step": 0.01,
           "precision": 2
+        },
+        {
+          "key": "since",
+          "label": "生效日期",
+          "type": "date",
+          "default": "2026-01-01"
+        }
+      ]
+    },
+    {
+      "key": "plans",
+      "label": "止盈止损",
+      "type": "list",
+      "default": "[]",
+      "maxItems": 8,
+      "item": [
+        {
+          "key": "code",
+          "label": "代码",
+          "type": "text",
+          "default": "sh600519"
+        },
+        {
+          "key": "name",
+          "label": "名称",
+          "type": "text",
+          "default": "贵州茅台"
+        },
+        {
+          "key": "cost",
+          "label": "买入价（0 为不设）",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 1000000,
+          "step": 0.01,
+          "precision": 2
+        },
+        {
+          "key": "stop_pct",
+          "label": "止损（%，0 为关闭）",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 99,
+          "step": 0.1,
+          "precision": 1
+        },
+        {
+          "key": "take_pct",
+          "label": "止盈（%，0 为关闭）",
+          "type": "number",
+          "default": "0",
+          "min": 0,
+          "max": 1000,
+          "step": 0.1,
+          "precision": 1
         },
         {
           "key": "since",
