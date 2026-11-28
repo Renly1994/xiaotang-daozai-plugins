@@ -3,7 +3,7 @@
   "name": "我的日子",
   "titleAccent": "日子",
   "author": "岛仔",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
@@ -29,7 +29,8 @@
   "permissions": {},
   "data": [
     "holidays-2026.json",
-    "holidays-2027.json"
+    "holidays-2027.json",
+    "lunar-calendar.json"
   ],
   "settings": [
     {
@@ -68,28 +69,26 @@
             {
               "label": "生日",
               "value": "birthday"
+            },
+            {
+              "label": "发薪日（照常）",
+              "value": "payday"
+            },
+            {
+              "label": "发薪日（遇休提前）",
+              "value": "payday-early"
+            },
+            {
+              "label": "发薪日（遇休顺延）",
+              "value": "payday-late"
             }
           ]
         },
         {
           "key": "yearly",
-          "label": "重复",
-          "type": "choice",
-          "default": "false",
-          "choices": [
-            {
-              "label": "默认",
-              "value": "false"
-            },
-            {
-              "label": "每月",
-              "value": "monthly"
-            },
-            {
-              "label": "每年",
-              "value": "true"
-            }
-          ]
+          "label": "重复或农历（如每3个月、农历8-15）",
+          "type": "text",
+          "default": "默认"
         },
         {
           "key": "icon",

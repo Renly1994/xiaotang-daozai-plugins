@@ -10,7 +10,8 @@ const defaults = Object.fromEntries(manifest.settings.map(field => [field.key, f
 const plugin = runInNewContext(`${read("../main.js")}\n({refresh, action, computeState})`);
 const tickets = output => output.canvas.nodes.find(node => node.id?.startsWith("tickets-")).group;
 const labels = output => Array.from(tickets(output), ticket => ticket.group.find(node => node.text).text);
-const caption = output => output.pinned.canvas.nodes.find(node => node.text).text;
+const caption = output => output.pinned.canvas.nodes.flatMap(node => node.group || [node])
+    .map(node => node.text || "").join("");
 
 function input(name) {
     const fixture = JSON.parse(read(`./${name}.json`));
@@ -37,7 +38,7 @@ test("我的日子由独立功能管理，不向待办输出卡片", () => {
 
 test("普通日合并己方日子与节假日并按日期排序", () => {
     const output = plugin.refresh(input("ordinary"));
-    assert.equal(caption(output), "还有 1 天 · 圣诞聚餐");
+    assert.equal(caption(output), "1天 · 圣诞聚餐");
     assert.deepEqual(labels(output).slice(0, 3), ["圣诞聚餐", "朋友", "元旦"]);
     assert.equal(output.canvas.height, 200);
     assert.equal(output.next_refresh_at, Date.parse("2026-12-25T00:00+08:00") / 1000);
@@ -52,14 +53,14 @@ test("常驻长名称的自定义倒数优先保留完整天数", () => {
     }])};
     const output = plugin.refresh({...current, today: "2026-11-26",
         now: Date.parse("2026-11-26T12:00+08:00"), settings});
-    assert.equal(caption(output), `还有 400 天 · ${name}`);
+    assert.equal(caption(output), `400天 · ${name}`);
 });
 
 test("假期当天与调休上班写入日历标注", () => {
     const holiday = plugin.refresh(input("holiday"));
     assert.equal(holiday.status.state, "succeeded");
     assert.equal(holiday.marker, "国庆节 · 休");
-    assert.equal(caption(holiday), "今天是 国庆节");
+    assert.equal(caption(holiday), "今天 · 国庆节");
     assert.ok(holiday.canvas.nodes.find(node => node.id?.startsWith("paper-")).group.some(node => node.text === "今天"));
     const makeup = plugin.refresh(input("makeup"));
     assert.equal(makeup.marker, "班");
@@ -68,17 +69,17 @@ test("假期当天与调休上班写入日历标注", () => {
 
 test("关闭节假日后仅显示自己的倒数和生日", () => {
     const output = plugin.refresh(input("own-only"));
-    assert.equal(caption(output), "还有 7 天 · 项目交付");
+    assert.equal(caption(output), "7天 · 项目交付");
     assert.deepEqual(labels(output), ["项目交付", "小唐"]);
     assert.ok(tickets(output)[1].group.some(node => node.text === "18"));
 });
 
 test("闰日生日在非闰年落在二月最后一天，闰年保留原日", () => {
     const ordinary = plugin.refresh(input("leap-birthday"));
-    assert.equal(caption(ordinary), "今天是 闰日朋友");
+    assert.equal(caption(ordinary), "今天 · 闰日朋友");
     assert.equal(ordinary.notice.title, "闰日朋友 生日快乐");
     const leap = plugin.refresh(input("leap-year"));
-    assert.equal(caption(leap), "生日还有 1 天 · 闰日朋友");
+    assert.equal(caption(leap), "1天 · 闰日朋友");
     assert.equal(leap.notice, undefined);
 });
 
@@ -174,13 +175,141 @@ test("每月重复按原日期计算，短月取月末，次月恢复原日", ()
     }
 });
 
+function customDay(date, today, yearly, kind = "countdown") {
+    const current = input("own-only");
+    const row = {name: "固定约定", date, kind, yearly, icon: "flag", color: "red", pinned_text: "默认"};
+    return {...current, today, now: Date.parse(today + "T12:00+08:00"),
+        settings: {...current.settings, days: JSON.stringify([row])}};
+}
+
+test("自定义间隔按起始日计算，到期当天仍属于本期", () => {
+    for (const [rule, base, today, next] of [
+        ["每2天", "2026-11-28", "2026-11-27", "2026-11-28"],
+        ["每2天", "2026-11-28", "2026-11-30", "2026-11-30"],
+        ["每2天", "2026-11-28", "2026-12-01", "2026-12-02"],
+        ["每2周", "2026-11-28", "2026-12-01", "2026-12-12"],
+        ["每3个月", "2026-11-28", "2026-12-01", "2027-02-28"],
+        ["每3月", "2026-11-28", "2027-03-01", "2027-05-28"],
+        ["每月", "2027-01-31", "2027-03-01", "2027-03-31"],
+        ["每2年", "2028-02-29", "2029-03-01", "2030-02-28"],
+        ["每2年", "2028-02-29", "2030-03-01", "2032-02-29"],
+        ["每100天", "2026-01-01", "2026-01-02", "2026-04-11"],
+    ]) {
+        const [day] = plugin.computeState(customDay(base, today, rule)).own;
+        assert.equal(day.dateLabel, next, rule);
+        assert.equal(day.current, today === next, rule);
+    }
+});
+
+test("默认生日每年重复，显式不重复和非法间隔不会生成下一期", () => {
+    const today = "2026-11-28";
+    for (const value of ["默认", "false", "true", "每年"]) {
+        const [day] = plugin.computeState(customDay("2020-11-28", today, value, "birthday")).own;
+        assert.equal(day.current, true, value);
+    }
+    for (const value of ["不重复", "0", "每0天"]) {
+        const [day] = plugin.computeState(customDay("2020-11-28", today, value, "birthday")).own;
+        assert.equal(day.current, false, value);
+        assert.equal(day.dateLabel, "2020-11-28", value);
+    }
+    for (const value of ["每2.5天", "每101天", "每两个月"]) {
+        const output = plugin.refresh(customDay("2026-11-27", today, value));
+        assert.ok(tickets(output)[0].group.some(node => node.text?.includes("重复格式有误")), value);
+    }
+});
+
+test("纪念日保留累计天数并在副标题显示下一期", () => {
+    const input = customDay("2026-11-28", "2026-11-29", "每2周", "anniversary");
+    const [day] = plugin.computeState(input).own;
+    assert.equal(day.days, 1);
+    assert.ok(tickets(plugin.refresh(input))[0].group.some(node => node.text?.includes("下次 12.12")));
+
+    const due = plugin.refresh(customDay("2026-11-28", "2026-12-12", "每2周", "anniversary"));
+    assert.match(caption(due), /^14天了 · /);
+    assert.ok(tickets(due)[0].group.some(node => node.text === "14"));
+    assert.ok(tickets(due)[0].group.some(node => node.text?.includes("今天 · 每2周")));
+});
+
+test("四位天数按宽度缩字，常驻窄位优先保留完整计数", () => {
+    const base = "2022-01-01";
+    const today = new Date(Date.parse(base) + 1700 * 86400000).toISOString().slice(0, 10);
+    const output = plugin.refresh(customDay(base, today, "不重复", "anniversary"));
+    const sheet = output.canvas.nodes.find(node => node.id?.startsWith("paper-")).group;
+    assert.ok(sheet.find(node => node.text === "1700")?.size < 62);
+    assert.ok(tickets(output)[0].group.find(node => node.text === "1700")?.size < 14);
+    const main = output.pinned.canvas.nodes.find(node => node.text === "1700天了");
+    assert.ok(main && main.at[0] + main.max_width <= 46 && !main.loop);
+    const secondary = output.pinned.canvas.nodes.find(node => node.group);
+    assert.ok(secondary?.group.some(node => node.loop?.kind === "flow"));
+});
+
+test("农历支持按年、指定年份和闰月，列表同时显示对应公历", () => {
+    const lunarData = {...data, "lunar-calendar.json": JSON.parse(read("../lunar-calendar.json"))};
+    for (const [rule, now, expected] of [
+        ["农历1-1", "2026-02-17", "2026-02-17"],
+        ["农历1-1", "2026-02-18", "2027-02-06"],
+        ["农历2027-1-30", "2027-03-06", "2027-03-07"],
+        ["农历3-30", "2027-05-04", "2027-05-05"],
+        ["农历2026-8-15", "2026-09-01", "2026-09-25"],
+        ["农历2025-闰6-1", "2025-07-24", "2025-07-25"],
+        ["农历闰6-1", "2026-07-01", "2026-07-14"],
+    ]) {
+        const scenario = {...customDay("2020-01-01", now, rule, "birthday"), data: lunarData};
+        const [day] = plugin.computeState(scenario).own;
+        assert.equal(day.dateLabel, expected, rule);
+        assert.ok(tickets(plugin.refresh(scenario))[0].group.some(node =>
+            node.text?.includes("农历") && node.text.includes(expected.slice(5).replace("-", "."))));
+        assert.equal(Boolean(plugin.refresh(scenario).notice), now === expected);
+    }
+});
+
+test("无效农历不回退到公历提醒，指定农历原日可累计纪念天数", () => {
+    const lunarData = {...data, "lunar-calendar.json": JSON.parse(read("../lunar-calendar.json"))};
+    const invalid = {...customDay("2026-11-28", "2026-11-28", "农历2026-闰6-1", "birthday"), data: lunarData};
+    assert.equal(plugin.refresh(invalid).notice, undefined);
+    assert.ok(tickets(plugin.refresh(invalid))[0].group.some(node => node.text?.includes("农历日期有误")));
+    const shortMonth = {...customDay("2027-05-01", "2027-05-04", "农历2027-3-30"), data: lunarData};
+    assert.equal(plugin.computeState(shortMonth).own[0].date, null);
+
+    const anniversary = {...customDay("2026-01-01", "2026-02-18", "农历2026-1-1 每年", "anniversary"), data: lunarData};
+    const [day] = plugin.computeState(anniversary).own;
+    assert.equal(day.days, 1);
+    assert.equal(day.dateLabel, "2026-02-17");
+    assert.ok(tickets(plugin.refresh(anniversary))[0].group.some(node => node.text?.includes("02.06")));
+});
+
+test("发薪日遇休提前或顺延，调休上班按工作日计算", () => {
+    for (const [kind, base, today, expected] of [
+        ["payday", "2027-01-06", "2027-02-01", "2027-02-06"],
+        ["payday-early", "2027-01-06", "2027-02-04", "2027-02-04"],
+        ["payday-late", "2027-01-06", "2027-02-06", "2027-02-14"],
+        ["payday-late", "2027-01-06", "2027-02-14", "2027-02-14"],
+        ["payday-late", "2026-12-31", "2027-02-01", "2027-03-01"],
+        ["payday-late", "2026-12-31", "2027-03-01", "2027-03-01"],
+        ["payday-early", "2027-01-01", "2026-12-31", "2026-12-31"],
+        ["payday-late", "2027-01-31", "2027-01-31", "2027-01-31"],
+        ["payday-late", "2027-01-06", "2027-02-15", "2027-03-08"],
+    ]) {
+        const scenario = customDay(base, today, "默认", kind);
+        const [day] = plugin.computeState(scenario).own;
+        assert.equal(day.dateLabel, expected, `${kind} ${today}`);
+    }
+});
+
+test("发薪日缺少下一年假期安排时保留原日期并提示待确认", () => {
+    const scenario = customDay("2027-12-01", "2027-12-31", "默认", "payday-late");
+    const [day] = plugin.computeState(scenario).own;
+    assert.equal(day.dateLabel, "2028-01-01");
+    assert.ok(tickets(plugin.refresh(scenario))[0].group.some(node => node.text?.includes("假期待公布")));
+});
+
 test("恢复最近即使筛选隐藏目标车票，也显示常驻反馈", () => {
     const current = input("design");
     const first = plugin.refresh(current);
     assert.match(caption(first), /元旦/);
     const birthday = tickets(first).find(row => row.group.some(node => node.text === "小唐生日"));
     const chosen = plugin.action({...current, storage: first.storage, action: {id: birthday.hit.action}});
-    assert.match(caption(chosen), /^生日还有 .* · 小唐生日$/);
+    assert.match(caption(chosen), /^\d+天 · 小唐生日$/);
     assert.equal(chosen.pinned.canvas.nodes[0].icon, "cake");
     const saved = plugin.refresh({...current, storage: chosen.storage});
     assert.equal(caption(saved), caption(chosen));
