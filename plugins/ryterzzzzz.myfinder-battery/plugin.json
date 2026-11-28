@@ -1,0 +1,16 @@
+{
+  "id": "ryterzzzzz.myfinder-battery",
+  "name": "MyFinder 无线电量桥接",
+  "author": "RyterZzzzz",
+  "version": "1.0.0",
+  "api": 1,
+  "runtime": "js",
+  "entry": "main.js",
+  "cover": "cover.png",
+  "owner": "wireless",
+  "capabilities": ["wireless.devices", "timer", "storage"],
+  "permissions": {"source.read": "loopback"},
+  "refreshSeconds": 60,
+  "dataVersion": 1,
+  "settings": []
+}
