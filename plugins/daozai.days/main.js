@@ -1,8 +1,9 @@
 const DAY = 86400000;
 const FILTERS = ["all", "holidays", "mine"];
 const REMINDER_INTERVAL = 61000;
-const DEFAULT_COLORS = { countdown: "red", birthday: "orange", anniversary: "purple", holiday: "red" };
-const DEFAULT_ICONS = { countdown: "flag", birthday: "cake", anniversary: "heart", holiday: "calendar" };
+const DEFAULT_COLORS = { countdown: "red", birthday: "orange", anniversary: "purple", holiday: "red", payday: "teal" };
+const DEFAULT_ICONS = { countdown: "flag", birthday: "cake", anniversary: "heart", holiday: "calendar", payday: "coin" };
+const PAYDAY_SHIFT = { payday: 0, "payday-early": -1, "payday-late": 1 };
 const HOLIDAY_COLORS = { "元旦": "red", "春节": "red", "清明节": "green", "劳动节": "blue",
     "端午节": "teal", "中秋节": "orange", "国庆节": "red" };
 const COLORS = {
@@ -33,6 +34,112 @@ function dayOfMonth(year, month, day) {
     return date.setUTCDate(Math.min(day, date.getUTCDate())) / DAY;
 }
 
+function repeatRule(value, birthday) {
+    let rule = (value ?? "默认").trim();
+    if (rule === "默认" || rule === "false" || !rule) rule = birthday ? "每年" : "不重复";
+    if (rule === "true") rule = "每年";
+    if (rule === "monthly") rule = "每月";
+    if (rule === "不重复" || rule === "0") return null;
+    const match = /^每\s*(?:(\d{1,3})\s*)?(天|周|个?月|年)$/.exec(rule);
+    if (!match) return undefined;
+    const count = Number(match[1] ?? 1);
+    if (count > 100) return undefined;
+    if (count === 0) return null;
+    const unit = match[2].slice(-1);
+    const label = count === 1 ? "每" + unit : `每${count}${unit === "月" ? "个月" : unit}`;
+    return { count, unit, label };
+}
+
+function nextDate(iso, base, today, year, month, rule) {
+    if (!rule || today <= base) return base;
+    const { count, unit } = rule;
+    if (unit === "天" || unit === "周") {
+        const step = count * (unit === "周" ? 7 : 1);
+        return base + Math.ceil((today - base) / step) * step;
+    }
+    const startYear = Number(iso.slice(0, 4));
+    const startMonth = Number(iso.slice(5, 7));
+    const startDay = Number(iso.slice(8));
+    const step = count * (unit === "年" ? 12 : 1);
+    const elapsed = (year - startYear) * 12 + month - startMonth;
+    const targetMonth = startMonth + Math.floor(elapsed / step) * step;
+    const candidate = dayOfMonth(startYear, targetMonth, startDay);
+    return candidate >= today ? candidate : dayOfMonth(startYear, targetMonth + step, startDay);
+}
+
+function lunarDate(calendar, year, month, day, leap, annual = false) {
+    const data = calendar?.years[year - calendar.firstYear];
+    if (!data) return null;
+    const [newYear, leapMonth, lengths] = data;
+    if (leap && !annual && leapMonth !== month) return null;
+    const afterLeap = leapMonth > 0 && (month > leapMonth || (leap && month === leapMonth));
+    const index = month - 1 + Number(afterLeap);
+    const length = 29 + Number(lengths[index]);
+    if (!annual && day > length) return null;
+    let offset = newYear + Math.min(day, length) - 1;
+    for (let i = 0; i < index; i++) offset += 29 + Number(lengths[i]);
+    return Date.UTC(year, 0, 1) / DAY + offset;
+}
+
+function scheduleLunar(value, base, today, year, calendar) {
+    const badDate = { base, date: null, error: "农历日期有误" };
+    const match = /^农历\s*(?:(\d{4})-)?(闰)?(\d{1,2})-(\d{1,2})(?:\s*(每年))?$/.exec(value);
+    if (!match) return {...badDate, error: "农历格式有误"};
+    const [, start, leap, monthText, dayText, repeat] = match;
+    const month = Number(monthText);
+    const day = Number(dayText);
+    if (month < 1 || month > 12 || day < 1 || day > 30) return badDate;
+    if (!calendar) return {...badDate, error: "农历数据不可用"};
+    const startYear = start ? Number(start) : calendar.firstYear;
+    const first = start ? lunarDate(calendar, startYear, month, day, Boolean(leap)) : base;
+    if (first === null) return badDate;
+    const lunar = `农历${leap || ""}${month}-${day}`;
+    if (start && !repeat) return {base: first, date: first, lunar};
+    let candidateYear = Math.max(startYear, year - 1);
+    const lastYear = calendar.firstYear + calendar.years.length - 1;
+    while (candidateYear <= lastYear) {
+        const date = candidateYear === startYear && start ? first
+            : lunarDate(calendar, candidateYear, month, day, Boolean(leap), true);
+        if (date >= today) return {base: first, date, lunar, lunarYearly: true};
+        candidateYear += 1;
+    }
+    return {...badDate, error: "已超出农历范围"};
+}
+
+function isWorkday(day, calendars) {
+    const iso = dateText(day);
+    const bundle = calendars.find(item => item.year === Number(iso.slice(0, 4)));
+    if (!bundle || bundle.pending) return undefined;
+    if (bundle.makeup.includes(iso)) return true;
+    if (bundle.holidays.some(([, from, to]) => from <= iso && iso <= to)) return false;
+    const weekdayIndex = new Date(day * DAY).getUTCDay();
+    return weekdayIndex > 0 && weekdayIndex < 6;
+}
+
+function adjustPayday(nominal, shift, calendars) {
+    if (!shift) return { date: nominal, payNote: "每月发薪" };
+    const policy = shift < 0 ? "遇休提前" : "遇休顺延";
+    for (let offset = 0; offset <= 31; offset++) {
+        const date = nominal + offset * shift;
+        const working = isWorkday(date, calendars);
+        if (working === undefined) return { date: nominal, payNote: "假期待公布" };
+        if (working) return { date, payNote: policy };
+    }
+    return { date: nominal, payNote: "发薪日待确认" };
+}
+
+function schedulePayday(iso, base, today, year, month, shift, calendars) {
+    const monthDay = Number(iso.slice(8));
+    const baseOffset = (Number(iso.slice(0, 4)) - year) * 12 + Number(iso.slice(5, 7)) - month;
+    let offset = Math.max(-1, baseOffset);
+    let due;
+    do {
+        due = adjustPayday(dayOfMonth(year, month + offset, monthDay), shift, calendars);
+        offset += 1;
+    } while (due.date < today);
+    return {base, ...due};
+}
+
 function settingRows(settings, key) {
     return ["", "_2", "_3"].flatMap(suffix => JSON.parse(settings[key + suffix] || "[]"));
 }
@@ -46,37 +153,36 @@ function singleLine(value) {
     return result.trim();
 }
 
-function ownDays(settings, today, year, month) {
+function ownDays(settings, today, year, month, calendars, lunarCalendar) {
     const options = new Map(settingRows(settings, "day_options").map(row => [singleLine(row.name), row]));
     return settingRows(settings, "days").slice(0, 20).map(row => {
         const settingName = singleLine(row.name);
         const name = [...settingName].slice(0, 12).join("") || "新日子";
         const extra = options.get(settingName) || {};
-        const frequency = row.yearly ?? extra.yearly;
-        const monthly = frequency === "monthly";
-        const yearly = !monthly && (row.kind === "birthday" || frequency === "true");
-        const base = Date.parse(row.date) / DAY;
-        let date = base;
-        if (monthly || yearly) {
-            const targetMonth = monthly ? month : Number(row.date.slice(5, 7));
-            const monthDay = Number(row.date.slice(8));
-            date = dayOfMonth(year, targetMonth, monthDay);
-            if (date < today) {
-                date = monthly ? dayOfMonth(year, targetMonth + 1, monthDay)
-                    : dayOfMonth(year + 1, targetMonth, monthDay);
-            }
-            date = Math.max(base, date);
+        const rule = (row.yearly ?? extra.yearly ?? "默认").trim();
+        const start = Date.parse(row.date) / DAY;
+        const payday = Object.hasOwn(PAYDAY_SHIFT, row.kind);
+        let schedule;
+        if (payday) {
+            schedule = schedulePayday(row.date, start, today, year, month, PAYDAY_SHIFT[row.kind], calendars);
+        } else if (rule.startsWith("农历")) {
+            schedule = scheduleLunar(rule, start, today, year, lunarCalendar);
+        } else {
+            const repeat = repeatRule(rule, row.kind === "birthday");
+            schedule = {base: start, date: nextDate(row.date, start, today, year, month, repeat), repeat};
         }
-        const since = row.kind === "anniversary" && today >= base;
-        const days = since ? today - base : date - today;
+        const {base, date} = schedule;
+        const since = date !== null && row.kind === "anniversary" && today >= base;
+        const days = since ? today - base : date === null ? 0 : date - today;
+        const kind = payday ? "payday" : row.kind;
         const defaults = row.icon === "flag" && row.color === "red";
-        const icon = !defaults && ICONS.includes(row.icon) ? row.icon : DEFAULT_ICONS[row.kind];
-        const color = !defaults && Object.hasOwn(COLORS, row.color) ? row.color : DEFAULT_COLORS[row.kind];
+        const icon = !defaults && ICONS.includes(row.icon) ? row.icon : DEFAULT_ICONS[kind];
+        const color = !defaults && Object.hasOwn(COLORS, row.color) ? row.color : DEFAULT_COLORS[kind];
         const template = row.pinned_text ?? extra.pinned_text ?? "";
         const displayDate = since ? base : date;
-        const dateLabel = displayDate === base ? row.date : dateText(displayDate);
+        const dateLabel = displayDate === null ? "" : dateText(displayDate);
         return {
-            name, settingName, kind: row.kind, monthly, yearly, date, displayDate, dateLabel, days, since,
+            ...schedule, name, settingName, kind, displayDate, dateLabel, days, since,
             current: date === today,
             icon, color,
             template: [...singleLine(template === "默认" ? "" : template)].slice(0, 24).join(""),
@@ -85,20 +191,13 @@ function ownDays(settings, today, year, month) {
     });
 }
 
-function description(day) {
-    if (day.current) return `今天是 ${day.name}`;
-    if (day.since) return `${day.name} ${day.days} 天`;
-    if (day.days < 0) return `${day.name} 已到期`;
-    const remaining = `还有 ${day.days} 天`;
-    if (day.kind === "holiday") return `${day.name} ${remaining}`;
-    return `${day.kind === "birthday" ? "生日" : ""}${remaining} · ${day.name}`;
-}
-
 function computeState(input) {
     const { settings = {}, storage, data, action } = input;
     const today = Date.parse(input.today) / DAY;
     const year = Number(input.today.slice(0, 4));
-    const bundles = settings.show_holidays === "true" ? Object.values(data || {}) : [];
+    const calendars = Object.entries(data || {}).filter(([name]) => /^holidays-\d{4}\.json$/.test(name))
+        .map(([, calendar]) => calendar);
+    const bundles = settings.show_holidays === "true" ? calendars : [];
     const holidays = bundles.filter(bundle => !bundle.pending).flatMap(bundle =>
         bundle.holidays.map(([name, from, to]) => {
             const date = Date.parse(from) / DAY;
@@ -115,10 +214,11 @@ function computeState(input) {
     const weekdayIndex = (new Date(today * DAY).getUTCDay() + 6) % 7;
     const monday = today - weekdayIndex;
     const weekly = makeup.filter(date => Date.parse(date) / DAY >= monday && Date.parse(date) / DAY < monday + 7);
-    const own = ownDays(settings, today, year, Number(input.today.slice(5, 7)));
-    const days = [...holidays.filter(day => day.end >= today), ...own].sort((left, right) => left.date - right.date);
+    const own = ownDays(settings, today, year, Number(input.today.slice(5, 7)), calendars, data?.["lunar-calendar.json"]);
+    const days = [...holidays.filter(day => day.end >= today), ...own]
+        .sort((left, right) => (left.date ?? Infinity) - (right.date ?? Infinity));
     days.forEach((day, index) => { day.pinAction = "pin-" + index; });
-    const nearest = days.find(day => day.current) || days.find(day => day.date >= today)
+    const nearest = days.find(day => day.current) || days.find(day => day.date !== null && day.date >= today)
         || days.findLast(day => day.since);
     const pinnedBase = singleLine(settings.pinned_day || NEAREST);
     const chosen = days.find(day => day.pinAction === action?.id);
@@ -141,6 +241,18 @@ function text(value, x, y, size, options = {}) {
     return { text: value, at: [x, y], size, ...options };
 }
 
+function textUnits(value) {
+    return [...value].reduce((units, char) => units + (char >= "0" && char <= "9" ? 0.67 : 1), 0);
+}
+
+function fitSize(value, width, preferred) {
+    return Math.max(6, Math.min(preferred, Math.floor(width / textUnits(value))));
+}
+
+function displayToday(day) {
+    return day.current && (!day.since || day.days === 0);
+}
+
 function expandTemplate(template, replacements) {
     const segments = template.split("{");
     let result = segments[0];
@@ -154,25 +266,51 @@ function expandTemplate(template, replacements) {
 
 function toPinned({ pinned }) {
     if (!pinned) return;
-    const replacements = {
-        名称: pinned.name, 天数: String(pinned.days), 日期: pinned.dateLabel, 星期: weekday(pinned.displayDate)
-    };
-    const expanded = pinned.current || !pinned.template ? description(pinned)
-        : expandTemplate(pinned.template, replacements);
-    const caption = [...expanded].slice(0, 24).join("");
+    const today = displayToday(pinned);
     const [, , accent] = COLORS[pinned.color];
-    return { canvas: { width: 156, fit_width: true, nodes: [
-        { icon: pinned.icon, rect: [2, 4, 14, 14], stroke: accent, width: 1.15, cap: "round" },
-        text(caption, 21, 15, [...caption].length > 16 ? 9 : 11, { max_width: 135, fill: "$text", weight: 700 })
+    if (pinned.template && !today && !pinned.error) {
+        const expanded = expandTemplate(pinned.template, {
+            名称: pinned.name, 天数: String(pinned.days), 日期: pinned.dateLabel, 星期: weekday(pinned.displayDate)
+        });
+        const caption = [...expanded].slice(0, 24).join("");
+        return { canvas: { width: 156, fit_width: true, nodes: [
+            { icon: pinned.icon, rect: [2, 4, 14, 14], stroke: accent, width: 1.15, cap: "round" },
+            text(caption, 21, 15, [...caption].length > 16 ? 9 : 11, { max_width: 135, fill: "$text", weight: 700 })
+        ] } };
+    }
+    const value = pinned.error ? "检查日期" : today ? "今天" : pinned.days < 0 ? "已到期"
+        : `${pinned.days}${pinned.since ? "天了" : "天"}`;
+    const size = fitSize(value, 43, 11);
+    const iconX = Math.ceil(textUnits(value) * size) + 6;
+    const nameX = iconX + 16;
+    const name = " · " + pinned.name;
+    const width = Math.min(156, nameX + Math.ceil(textUnits(name) * 11));
+    return { canvas: { width, fit_width: true, nodes: [
+        { icon: pinned.icon, rect: [iconX, 4, 14, 14], stroke: accent, width: 1.15, cap: "round" },
+        text(value, 2, 15, size, { max_width: 43, fill: "$text", weight: 700 }),
+        { clip: [nameX, 0, width - nameX, 22], group: [
+            text(name, nameX, 15, 11, { max_width: width - nameX, fill: "$text",
+                loop: { kind: "flow", period_ms: 4800 } })
+        ] }
     ] } };
 }
 
 function dateColumn(day) {
-    if (day.since) return day.dateLabel.split("-").join(".") + " 起";
-    return [
-        day.dateLabel.slice(5).replace("-", "."),
-        day.length ? "放假 " + day.length + " 天" : day.monthly ? "每月" : day.yearly ? "每年" : ""
-    ].filter(Boolean).join(" · ");
+    if (day.error) return day.error;
+    if (day.lunar) {
+        const next = day.since && day.lunarYearly;
+        const dayText = (next ? dateText(day.date) : day.dateLabel).slice(5).replace("-", ".");
+        return `${day.lunar} · ${next ? "下次 " : ""}${dayText}`;
+    }
+    let date = day.dateLabel.slice(5).replace("-", ".");
+    if (day.payNote) return `${date} · ${day.payNote}`;
+    if (day.since) {
+        date = day.repeat
+            ? day.current ? "今天" : "下次 " + dateText(day.date).slice(5).replace("-", ".")
+            : day.dateLabel.replaceAll("-", ".") + " 起";
+    }
+    const rule = day.repeat === undefined && day.kind !== "holiday" ? "重复格式有误" : day.repeat?.label;
+    return [date, day.length ? "放假 " + day.length + " 天" : rule].filter(Boolean).join(" · ");
 }
 
 function sheet(day, dayNumber, retiring = false) {
@@ -183,10 +321,11 @@ function sheet(day, dayNumber, retiring = false) {
         { rect: [106, 0, 7, 8], r: [0, 0, 3, 3], fill: "$bg" }
     ];
     if (day) {
+        const today = displayToday(day);
         const header = day.current || day.since || day.days < 0 ? day.name : "距 " + day.name;
-        const number = day.current ? "今天" : day.days < 0 ? "已到期" : String(day.days);
-        const word = day.current || day.days < 0 ? "" : day.since ? "天了" : "天";
-        const size = day.current || day.days < 0 || number.length > 4 ? 39 : 62;
+        const number = today ? "今天" : day.days < 0 ? "已到期" : String(day.days);
+        const word = today || day.days < 0 ? "" : day.since ? "天了" : "天";
+        const size = fitSize(number, 132, today || day.days < 0 ? 39 : 62);
         nodes.push(
             text(header, 10, 24, 11, { weight: 700, fill: "#FFFFFF", max_width: day.length ? 84 : 128 }),
             text(number, 73, 114, size, { weight: 900, align: "center", max_width: 132, fill: "#E8473B" }),
@@ -197,8 +336,6 @@ function sheet(day, dayNumber, retiring = false) {
         );
         if (day.length) {
             nodes.push(text("放假 " + day.length + " 天", 138, 24, 9.5, { align: "right", max_width: 54, fill: "#FFFFFFDD" }));
-        } else if (day.since && !day.current) {
-            nodes.push(text("已", 20, 112, 10.5, { fill: "#6B6355", weight: 700 }));
         }
     } else {
         nodes.push(
@@ -220,8 +357,9 @@ function ticket(day, index, isPinned) {
         + "V25Q222 32 215 32H9Q2 32 2 25V22C4.76 22 7 19.76 7 17C7 14.24 4.76 12 2 12V9Q2 2 9 2Z";
     // 凹形填色的外缘由描边平滑，留出列表裁切所需的余量。
     const stroke = day.current ? "#FFEF94" : isPinned ? "#FFFFFF" : fill;
-    const days = day.current ? "今天" : day.days < 0 ? "到期" : String(day.days);
-    const qualifier = day.current || day.days < 0 ? "" : day.since ? "天了" : "天";
+    const badge = day.error || displayToday(day) || day.days < 0;
+    const days = day.error ? "检查" : badge ? day.days < 0 ? "到期" : "今天" : String(day.days);
+    const qualifier = badge ? "" : day.since ? "天了" : "天";
     return {
         id: "ticket-" + day.pinAction, translate: [0, index * 38], hit: { action: day.pinAction },
         hover: { lift: 1 }, animate: { ms: 160 },
@@ -231,8 +369,8 @@ function ticket(day, index, isPinned) {
             text(day.name, 30, 14, 11, { weight: 700, max_width: 118, fill: ink }),
             text(dateColumn(day), 30, 25, 8.5, { max_width: 118, fill: ink, opacity: 0.74 }),
             { line: [158, 4, 158, 28], dash: [2, 2], width: 1, stroke: ink, opacity: 0.4 },
-            text(days, day.current || day.days < 0 ? 191 : 196, 21.5, 14, {
-                align: day.current || day.days < 0 ? "center" : "right", weight: 800, max_width: 34, fill: ink
+            text(days, badge ? 191 : 196, 21.5, fitSize(days, 34, 14), {
+                align: badge ? "center" : "right", weight: 800, max_width: 34, fill: ink
             }),
             text(qualifier, 199, 21, 8, { fill: ink })
         ]
