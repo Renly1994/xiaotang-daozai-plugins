@@ -3,7 +3,7 @@
   "name": "足球比分牌",
   "titleAccent": "比分牌",
   "author": "hawkings",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "api": 1,
   "runtime": "js",
   "entry": "main.js",
@@ -42,10 +42,11 @@
   },
   "settings": [
     {
-      "key": "date",
-      "label": "看板日期（留作预览；下一场自动从当前时间往后算）",
-      "type": "date",
-      "default": "2026-11-27"
+      "key": "intro",
+      "label": "功能介绍",
+      "type": "text",
+      "default": "关注球队后，状态页显示实时比分和下一场；点「选球队」可跨联赛多选，常驻条显示两队队徽与比分。",
+      "multiline": true
     }
   ],
   "statusLayout": {
